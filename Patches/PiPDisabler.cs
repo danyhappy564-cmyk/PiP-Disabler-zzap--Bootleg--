@@ -147,9 +147,9 @@ namespace PiPDisabler
         {
             try
             {
-                if (CameraClass.Exist && CameraClass.Instance != null)
+                if (CameraManager.Exist && CameraManager.Instance != null)
                 {
-                    var mgr = CameraClass.Instance.OpticCameraManager;
+                    var mgr = CameraManager.Instance.OpticCameraManager;
                     mgr.CurrentOpticSight = null;
                     mgr.OpticRetrice.SetOpticSight(null);
                     mgr.OpticRetrice.Clear();
@@ -196,10 +196,10 @@ namespace PiPDisabler
 
             try
             {
-                if (!CameraClass.Exist || CameraClass.Instance == null)
+                if (!CameraManager.Exist || CameraManager.Instance == null)
                     return;
 
-                var cam = CameraClass.Instance.OpticCameraManager?.Camera;
+                var cam = CameraManager.Instance.OpticCameraManager?.Camera;
                 if (cam == null)
                     return;
 

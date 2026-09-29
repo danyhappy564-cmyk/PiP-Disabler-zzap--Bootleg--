@@ -119,10 +119,10 @@ namespace PiPDisabler.Patches
 
         private static float GetCurrentFovMagnification()
         {
-            if (!CameraClass.Exist)
+            if (!CameraManager.Exist)
                 return FovController.GetVisualMagnification();
 
-            float currentFov = Mathf.Max(0.1f, CameraClass.Instance.Fov);
+            float currentFov = Mathf.Max(0.1f, CameraManager.Instance.Fov);
             float baseFovRad = FovController.MagnificationBaselineFov * Mathf.Deg2Rad;
             float currentFovRad = currentFov * Mathf.Deg2Rad;
             return Mathf.Max(1f, Mathf.Tan(baseFovRad * 0.5f) / Mathf.Tan(currentFovRad * 0.5f));
@@ -139,7 +139,13 @@ namespace PiPDisabler.Patches
 
         private static int GetVanillaSettingsFov()
         {
-            return (int)Singleton<SharedGameSettingsClass>.Instance.Game.Settings.FieldOfView;
+            try
+            {
+                if (CameraManager.Exist && CameraManager.Instance != null)
+                    return Mathf.RoundToInt(CameraManager.Instance.Fov);
+            }
+            catch { }
+            return 75;
         }
 
         [PatchPostfix]

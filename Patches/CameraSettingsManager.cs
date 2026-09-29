@@ -112,8 +112,7 @@ namespace PiPDisabler
         {
             try
             {
-                if (Singleton<SharedGameSettingsClass>.Instantiated)
-                    return Mathf.Max(0.01f, Singleton<SharedGameSettingsClass>.Instance.Graphics.Settings.LodBias.Value);
+                return Mathf.Max(0.01f, QualitySettings.lodBias);
             }
             catch { }
 
@@ -126,8 +125,8 @@ namespace PiPDisabler
 
             try
             {
-                if (CameraClass.Exist && CameraClass.Instance != null)
-                    currentFov = CameraClass.Instance.Fov;
+                if (CameraManager.Exist && CameraManager.Instance != null)
+                    currentFov = CameraManager.Instance.Fov;
                 else
                 {
                     var cam = Helpers.GetMainCamera();

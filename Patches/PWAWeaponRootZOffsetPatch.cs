@@ -44,13 +44,13 @@ namespace PiPDisabler.Patches
                 return;
             }
 
-            if (!CameraClass.Exist)
+            if (!CameraManager.Exist)
             {
                 LogState("skip: CameraClass missing");
                 return;
             }
 
-            float currentFov = CameraClass.Instance.Fov;
+            float currentFov = CameraManager.Instance.Fov;
             float zOffset = GetZOffset(currentFov);
 
             if (Mathf.Approximately(zOffset, 0f))

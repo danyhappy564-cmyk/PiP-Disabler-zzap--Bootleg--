@@ -668,9 +668,26 @@ namespace PiPDisabler
             if (_effectsShaderBundle == null)
             {
                 string pluginDir = Path.GetDirectoryName(typeof(PiPDisablerPlugin).Assembly.Location);
-                string bundlePath = Path.Combine(pluginDir ?? string.Empty, EffectsShaderBundleName);
-                if (File.Exists(bundlePath))
-                    _effectsShaderBundle = AssetBundle.LoadFromFile(bundlePath);
+                string[] possiblePaths = new[]
+                {
+                    Path.Combine(pluginDir ?? string.Empty, EffectsShaderBundleName),
+                    Path.Combine(pluginDir ?? string.Empty, "Shaders", EffectsShaderBundleName),
+                    Path.Combine(pluginDir ?? string.Empty, "Resources", "Shaders", EffectsShaderBundleName)
+                };
+
+                foreach (var bundlePath in possiblePaths)
+                {
+                    if (File.Exists(bundlePath))
+                    {
+                        try
+                        {
+                            _effectsShaderBundle = AssetBundle.LoadFromFile(bundlePath);
+                            if (_effectsShaderBundle != null)
+                                break;
+                        }
+                        catch { }
+                    }
+                }
             }
 
             if (_effectsShaderBundle == null)
@@ -922,13 +939,13 @@ namespace PiPDisabler
             bool hasActiveOptic = false;
             float currentFov = FovController.MagnificationBaselineFov;
 
-            if (CameraClass.Exist && CameraClass.Instance != null)
+            if (CameraManager.Exist && CameraManager.Instance != null)
             {
-                hasActiveOptic = CameraClass.Instance.OpticCameraManager != null &&
-                                 CameraClass.Instance.OpticCameraManager.CurrentOpticSight != null;
-                currentFov = CameraClass.Instance.Camera != null
-                    ? CameraClass.Instance.Camera.fieldOfView
-                    : CameraClass.Instance.Fov;
+                hasActiveOptic = CameraManager.Instance.OpticCameraManager != null &&
+                                 CameraManager.Instance.OpticCameraManager.CurrentOpticSight != null;
+                currentFov = CameraManager.Instance.Camera != null
+                    ? CameraManager.Instance.Camera.fieldOfView
+                    : CameraManager.Instance.Fov;
             }
 
             return hasActiveOptic || currentFov < FovController.MagnificationBaselineFov;
