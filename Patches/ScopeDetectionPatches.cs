@@ -291,6 +291,27 @@ namespace PiPDisabler.Patches
     }
 
     /// <summary>
+    /// 4.1 added a ChangeAimingMode(int modeIndex) overload that sets the aim index directly
+    /// without going through the parameterless method, so it needs its own postfix.
+    /// </summary>
+    internal sealed class ChangeAimingModeIndexPatch : ModulePatch
+    {
+        protected override MethodBase GetTargetMethod()
+            => AccessTools.Method(typeof(Player.FirearmController), "ChangeAimingMode", new[] { typeof(int) });
+
+        [PatchPostfix]
+        private static void Postfix()
+        {
+            if (!Settings.ModEnabled.Value) return;
+
+            PiPDisablerPlugin.DebugLogInfo(
+                $"[Patch] ChangeAimingMode(int) frame={Time.frameCount}");
+            ScopeLifecycle.CheckAndUpdate("ChangeAimingMode(int)");
+            ScopeLifecycle.OnSetScopeMode();
+        }
+    }
+
+    /// <summary>
     /// Postfix on Player.FirearmController.SetScopeMode(ScopeState[]).
     /// Fires after EFT applies the new scope/mode state to SightComponent, so
     /// ScopeLifecycle re-applies FOV change immediately.

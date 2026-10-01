@@ -54,13 +54,9 @@ namespace PiPDisabler.Patches
 
             try
             {
+                // 4.1: CameraManager exposes the controller as the public _cameraLodBiasController field.
                 if (CameraManager.Exist && CameraManager.Instance != null)
-                {
-                    var prop = AccessTools.Property(typeof(CameraManager), "CameraLodBiasController")
-                            ?? AccessTools.Property(typeof(CameraManager), "CameraLodBiasController_0");
-                    if (prop != null)
-                        _controller = prop.GetValue(CameraManager.Instance) as CameraLodBiasController;
-                }
+                    _controller = CameraManager.Instance._cameraLodBiasController;
             }
             catch { }
 

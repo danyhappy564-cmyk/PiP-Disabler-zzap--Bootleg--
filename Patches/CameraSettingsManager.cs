@@ -1,5 +1,6 @@
 using Comfort.Common;
 using EFT.CameraControl;
+using EFT.Settings;
 using PiPDisabler.Patches;
 using UnityEngine;
 
@@ -110,9 +111,12 @@ namespace PiPDisabler
 
         private static float GetGameSettingsLodBiasFloor()
         {
+            // Must read the game's graphics setting, not QualitySettings.lodBias: while scoped the
+            // latter holds our own scoped value, so using it as the floor only ever ratcheted upward.
             try
             {
-                return Mathf.Max(0.01f, QualitySettings.lodBias);
+                if (Singleton<SettingsManager>.Instantiated)
+                    return Mathf.Max(0.01f, Singleton<SettingsManager>.Instance.Graphics.Settings.LodBias.Value);
             }
             catch { }
 

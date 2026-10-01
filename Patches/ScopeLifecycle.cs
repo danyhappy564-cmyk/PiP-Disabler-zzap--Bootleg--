@@ -125,6 +125,16 @@ namespace PiPDisabler
 
         public static void OnOpticEnabled(OpticSight os)
         {
+            // OpticSight.OnEnable fires for every OpticSight in the scene. Only react to the local
+            // player's own weapon; otherwise a foreign optic toggling while we're scoped hijacks
+            // _activeOptic through the "mode switch" branch below.
+            if (os != null && !IsLocalPlayerOptic(os))
+            {
+                PiPDisablerPlugin.DebugLogInfo(
+                    $"[ScopeLifecycle] Ignoring OnEnable of foreign optic '{os.name}' frame={Time.frameCount}");
+                return;
+            }
+
             if (os != null)
                 _lastEnabledOptic = os;
 
@@ -208,9 +218,54 @@ namespace PiPDisabler
 
         public static void OnOpticDisabled(OpticSight os)
         {
-            ReticleRenderer.Hide();
-            ScopeEffectsRenderer.Hide();
+            // Only tear down the overlay when the optic that went away is the one we're using.
+            // Previously any OpticSight.OnDisable hid the reticle/effects; if our optic stayed
+            // enabled, CheckAndUpdate saw no state change and nothing re-showed them, so the
+            // reticle stayed gone until the next ADS.
+            if (_activeOptic == null || os == null || os == _activeOptic)
+            {
+                ReticleRenderer.Hide();
+                ScopeEffectsRenderer.Hide();
+            }
+            else
+            {
+                PiPDisablerPlugin.DebugLogInfo(
+                    $"[ScopeLifecycle] OnDisable of non-active optic '{os.name}' ignored for overlay " +
+                    $"(active='{_activeOptic.name}') frame={Time.frameCount}");
+            }
             CheckAndUpdate("OnOpticDisabled");
+        }
+
+        private static bool IsLocalPlayerOptic(OpticSight os)
+        {
+            try
+            {
+                var player = GetLocalPlayer();
+                if (player == null)
+                    return true; // nothing to compare against — keep the old behaviour
+
+                var aimTransforms = player.ProceduralWeaponAnimation?.ScopeAimTransforms;
+                if (aimTransforms != null)
+                {
+                    for (int i = 0; i < aimTransforms.Count; i++)
+                    {
+                        var cache = aimTransforms[i]?.ScopePrefabCache;
+                        if (cache == null) continue;
+                        for (int m = 0; m < cache.ModesCount; m++)
+                        {
+                            if (cache.GetOpticSight(m) == os)
+                                return true;
+                        }
+                    }
+                }
+
+                var root = player.Transform?.Original;
+                return root != null && os.transform.IsChildOf(root);
+            }
+            catch
+            {
+                return true;
+            }
         }
 
         internal static void RestoreBypassedOpticState(OpticSight os, string reason,
@@ -374,11 +429,42 @@ namespace PiPDisabler
             if (_activeOptic != null)
             {
                 float mag = FovController.GetVisualMagnification();
+                EnsureOverlayVisible(mag);
                 ReticleRenderer.UpdateTransform(mag);
                 ScopeEffectsRenderer.UpdateTransform();
             }
             Patches.WeaponScalingPatch.UpdateScale();
 
+        }
+
+        private static int _nextOverlayCheckFrame;
+
+        /// <summary>
+        /// Safety net: while scoped (and not intentionally hidden for reload/freelook), make sure
+        /// the reticle and scope effects are actually showing. Anything that hid them without a
+        /// matching state change used to leave them gone until the next ADS. Checked every 15 frames.
+        /// </summary>
+        private static void EnsureOverlayVisible(float mag)
+        {
+            if (_meshSurgerySuppressedByReload || _reticleSuppressedByReload)
+                return;
+            if (Time.frameCount < _nextOverlayCheckFrame)
+                return;
+            _nextOverlayCheckFrame = Time.frameCount + 15;
+
+            if (ReticleRenderer.HasReticle && !ReticleRenderer.IsShowing)
+            {
+                PiPDisablerPlugin.DebugLogInfo(
+                    $"[ScopeLifecycle] Reticle was hidden while scoped on '{_activeOptic.name}' — re-showing. frame={Time.frameCount}");
+                ReticleRenderer.Show(_activeOptic, mag);
+            }
+
+            if (!ScopeEffectsRenderer.IsVisible)
+            {
+                PiPDisablerPlugin.DebugLogInfo(
+                    $"[ScopeLifecycle] Scope effects were hidden while scoped — re-showing. frame={Time.frameCount}");
+                ScopeEffectsRenderer.Show();
+            }
         }
 
         public static void ForceExit()
@@ -810,7 +896,11 @@ namespace PiPDisabler
 
             try
             {
-                ScopeData scopeData = os.GetComponentInParent<ScopeData>();
+                // Prefer the optic's own ScopeData (vanilla assigns it in OpticSight.Awake) so a
+                // sibling mode's data under the same scope root can't be picked up by mistake.
+                ScopeData scopeData = os.ScopeData;
+                if (scopeData == null)
+                    scopeData = os.GetComponentInParent<ScopeData>();
                 if (scopeData == null)
                     scopeData = os.GetComponentInChildren<ScopeData>(true);
 
@@ -829,8 +919,10 @@ namespace PiPDisabler
                 if (scopeData == null)
                     return false;
 
-                bool hasNightVision = scopeData.NightVisionData != null;
-                bool hasThermal = scopeData.ThermalVisionData != null;
+                // Same test vanilla uses in OpticComponentUpdater.CopyComponentFromOptic: the data
+                // component may exist with the effect switched off, which is not an NV/thermal optic.
+                bool hasNightVision = scopeData.NightVisionData != null && scopeData.NightVisionData.NightVision;
+                bool hasThermal = scopeData.ThermalVisionData != null && scopeData.ThermalVisionData.ThermalVision;
 
                 if (hasNightVision || hasThermal)
                 {
@@ -885,7 +977,29 @@ namespace PiPDisabler
                 MeshSurgeryManager.RestoreAll();
         }
 
+        private static float _enterRetryAfter;
+
         private static void DoScopeEnter()
+        {
+            if (Time.realtimeSinceStartup < _enterRetryAfter)
+                return;
+
+            try
+            {
+                DoScopeEnterCore();
+            }
+            catch (Exception ex)
+            {
+                // A half-finished enter used to leave _isScoped=true with no zoom/reticle until the
+                // next ADS. Log it (always) and roll back; retry after 1s instead of every frame.
+                _enterRetryAfter = Time.realtimeSinceStartup + 1f;
+                PiPDisablerPlugin.LogSource.LogError(
+                    $"[ScopeLifecycle] Scope enter failed for '{(_activeOptic != null ? _activeOptic.name : "null")}': {ex}");
+                try { DoScopeExit(); } catch { }
+            }
+        }
+
+        private static void DoScopeEnterCore()
         {
             var os = FindEnabledOpticFromPWA();
             if (os == null)
@@ -1139,18 +1253,44 @@ namespace PiPDisabler
         private static Player GetLocalPlayer()
             => Helpers.GetLocalPlayer();
 
+        // Resolved lazily: a missing field must only disable the reload bypass, never throw from
+        // ScopeLifecycle's static initializer (which would take the whole mod down).
+        private static AccessTools.FieldRef<ProceduralWeaponAnimation, Player.ValueBlenderDelay> _tacticalReloadRef;
+        private static bool _tacticalReloadRefResolved;
+
         private static bool IsReloadActive()
         {
-            var player = GetLocalPlayer();
-            var pwa = player.ProceduralWeaponAnimation;
-            var BipodActive = pwa.IsBipodUsed;
-            if (BipodActive)
+            try
+            {
+                var pwa = GetLocalPlayer()?.ProceduralWeaponAnimation;
+                if (pwa == null || pwa.IsBipodUsed)
+                    return false;
+
+                if (!_tacticalReloadRefResolved)
+                {
+                    _tacticalReloadRefResolved = true;
+                    try
+                    {
+                        _tacticalReloadRef = AccessTools.FieldRefAccess<ProceduralWeaponAnimation, Player.ValueBlenderDelay>("_tacticalReload");
+                    }
+                    catch (Exception ex)
+                    {
+                        PiPDisablerPlugin.LogSource.LogError($"[ScopeLifecycle] _tacticalReload not found, reload bypass disabled: {ex.Message}");
+                    }
+                }
+                if (_tacticalReloadRef == null)
+                    return false;
+
+                var blender = _tacticalReloadRef(pwa);
+                if (blender == null)
+                    return false;
+
+                return blender.Value > (Mathf.Epsilon + Settings.ReloadBypassModifier.Value);
+            }
+            catch
+            {
                 return false;
-            var field = AccessTools.Field(typeof(ProceduralWeaponAnimation), "_tacticalReload");
-            var blender = field.GetValue(pwa);
-            var valueProp = AccessTools.Property(blender.GetType(), "Value");
-            float blendValue = (float)valueProp.GetValue(blender, null);
-            return blendValue > (Mathf.Epsilon + Settings.ReloadBypassModifier.Value);
+            }
         }
 
         private static void ArmPostSprintAimGate()

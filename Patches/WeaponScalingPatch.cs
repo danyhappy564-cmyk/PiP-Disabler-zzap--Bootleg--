@@ -3,6 +3,7 @@ using Comfort.Common;
 using System.Reflection;
 using EFT;
 using EFT.CameraControl;
+using EFT.Settings;
 using HarmonyLib;
 using SPT.Reflection.Patching;
 using UnityEngine;
@@ -139,10 +140,12 @@ namespace PiPDisabler.Patches
 
         private static int GetVanillaSettingsFov()
         {
+            // Must be the game's settings FOV, not CameraManager.Fov: this runs on scope exit while
+            // the camera is still zoomed, and feeding the zoomed FOV left the weapon mis-scaled.
             try
             {
-                if (CameraManager.Exist && CameraManager.Instance != null)
-                    return Mathf.RoundToInt(CameraManager.Instance.Fov);
+                if (Singleton<SettingsManager>.Instantiated)
+                    return Singleton<SettingsManager>.Instance.Game.Settings.FieldOfView;
             }
             catch { }
             return 75;

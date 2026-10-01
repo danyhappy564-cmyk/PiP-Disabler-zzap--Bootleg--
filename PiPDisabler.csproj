@@ -7,6 +7,10 @@
 		<RootNamespace>PiP-Disabler</RootNamespace>
 		<GenerateAssemblyInfo>true</GenerateAssemblyInfo>
 		<ModName>$(AssemblyName)</ModName>
+		<!-- SPT install root. Original layout (project two folders inside the SPT folder) still works;
+		     otherwise defaults to E:\SPT 4.1. Override with: dotnet build -p:SPTPath="D:\Your SPT" -->
+		<SPTPath Condition="'$(SPTPath)' == '' And Exists('$(MSBuildProjectDirectory)\..\..\EscapeFromTarkov_Data')">$(MSBuildProjectDirectory)\..\..</SPTPath>
+		<SPTPath Condition="'$(SPTPath)' == ''">E:\SPT 4.1</SPTPath>
 		<PackageStagingDir>$(ProjectDir)build\package</PackageStagingDir>
 		<PackagePluginDir>$(PackageStagingDir)\BepInEx\plugins\$(ModName)</PackagePluginDir>
 		<ReleaseDir>$(ProjectDir)Releases</ReleaseDir>
@@ -26,65 +30,67 @@
 
   <ItemGroup>
     <Reference Include="BepInEx">
-      <HintPath>..\..\BepInEx\core\BepInEx.dll</HintPath>
+      <HintPath>$(SPTPath)\BepInEx\core\BepInEx.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="0Harmony">
-      <HintPath>..\..\BepInEx\core\0Harmony.dll</HintPath>
+      <HintPath>$(SPTPath)\BepInEx\core\0Harmony.dll</HintPath>
       <Private>False</Private>
     </Reference>
 
     <!-- SPT ModulePatch -->
     <Reference Include="spt-reflection">
-      <HintPath>..\..\BepInEx\plugins\spt\spt-reflection.dll</HintPath>
+      <HintPath>$(SPTPath)\BepInEx\plugins\spt\spt-reflection.dll</HintPath>
       <Private>False</Private>
     </Reference>
 
     <!-- EFT + Unity -->
     <Reference Include="Assembly-CSharp">
-      <HintPath>..\..\EscapeFromTarkov_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <HintPath>$(SPTPath)\EscapeFromTarkov_Data\Managed\Assembly-CSharp.dll</HintPath>
       <Private>False</Private>
     </Reference>
 	  <Reference Include="Unity.Postprocessing.Runtime">
-		  <HintPath>..\..\EscapeFromTarkov_Data\Managed\Unity.Postprocessing.Runtime.dll</HintPath>
+		  <HintPath>$(SPTPath)\EscapeFromTarkov_Data\Managed\Unity.Postprocessing.Runtime.dll</HintPath>
 		  <Private>False</Private>
 	  </Reference>
     <Reference Include="Comfort">
-      <HintPath>..\..\EscapeFromTarkov_Data\Managed\Comfort.dll</HintPath>
+      <HintPath>$(SPTPath)\EscapeFromTarkov_Data\Managed\Comfort.dll</HintPath>
       <Private>False</Private>
     </Reference>
 	<Reference Include="UnityEngine.PhysicsModule">
-		  <HintPath>..\..\EscapeFromTarkov_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
+		  <HintPath>$(SPTPath)\EscapeFromTarkov_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
 		  <Private>False</Private>
 	</Reference>
     <Reference Include="UnityEngine">
-      <HintPath>..\..\EscapeFromTarkov_Data\Managed\UnityEngine.dll</HintPath>
+      <HintPath>$(SPTPath)\EscapeFromTarkov_Data\Managed\UnityEngine.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>..\..\EscapeFromTarkov_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath>$(SPTPath)\EscapeFromTarkov_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.AssetBundleModule">
-      <HintPath>..\..\EscapeFromTarkov_Data\Managed\UnityEngine.AssetBundleModule.dll</HintPath>
+      <HintPath>$(SPTPath)\EscapeFromTarkov_Data\Managed\UnityEngine.AssetBundleModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.InputLegacyModule">
-      <HintPath>..\..\EscapeFromTarkov_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
+      <HintPath>$(SPTPath)\EscapeFromTarkov_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Newtonsoft.Json">
-      <HintPath>..\..\BepInEx\core\Newtonsoft.Json.dll</HintPath>
+      <HintPath>$(SPTPath)\BepInEx\core\Newtonsoft.Json.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
 	<Target Name="PostBuild" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
-	<MakeDir Directories="$(ProjectDir)\..\..\BepInEx\plugins\$(ModName)" />
-	<Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ProjectDir)\..\..\BepInEx\plugins\$(ModName)" />
-	<Copy SourceFiles="$(ProjectDir)Resources\Shaders\pipdisabler_reticle_shaders.bundle" DestinationFolder="$(ProjectDir)\..\..\BepInEx\plugins\$(ModName)" Condition="Exists('$(ProjectDir)Resources\Shaders\pipdisabler_reticle_shaders.bundle')" />
-	<Copy SourceFiles="$(ProjectDir)Resources\Shaders\pipdisabler_effect_shaders.bundle" DestinationFolder="$(ProjectDir)\..\..\BepInEx\plugins\$(ModName)" Condition="Exists('$(ProjectDir)Resources\Shaders\pipdisabler_effect_shaders.bundle')" />
+	<MakeDir Directories="$(SPTPath)\BepInEx\plugins\$(ModName)" />
+	<Copy SourceFiles="$(TargetPath)" DestinationFolder="$(SPTPath)\BepInEx\plugins\$(ModName)" />
+	<Copy SourceFiles="$(ProjectDir)Resources\Shaders\pipdisabler_reticle_shaders.bundle" DestinationFolder="$(SPTPath)\BepInEx\plugins\$(ModName)" Condition="Exists('$(ProjectDir)Resources\Shaders\pipdisabler_reticle_shaders.bundle')" />
+	<Copy SourceFiles="$(ProjectDir)Resources\Shaders\pipdisabler_effect_shaders.bundle" DestinationFolder="$(SPTPath)\BepInEx\plugins\$(ModName)" Condition="Exists('$(ProjectDir)Resources\Shaders\pipdisabler_effect_shaders.bundle')" />
+	<!-- Per-scope settings: only copy when missing so in-game saved custom settings are never overwritten. -->
+	<Copy SourceFiles="$(ProjectDir)custom_mesh_surgery_settings.json" DestinationFolder="$(SPTPath)\BepInEx\plugins\$(ModName)" Condition="Exists('$(ProjectDir)custom_mesh_surgery_settings.json') And !Exists('$(SPTPath)\BepInEx\plugins\$(ModName)\custom_mesh_surgery_settings.json')" />
 
 	<RemoveDir Directories="$(PackageStagingDir)" Condition="Exists('$(PackageStagingDir)')" />
 	<MakeDir Directories="$(PackagePluginDir)" />

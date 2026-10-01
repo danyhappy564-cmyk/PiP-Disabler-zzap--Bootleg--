@@ -16,6 +16,7 @@ namespace PiPDisabler.Patches
             SafeEnable<TacticalRangeFinderOnEnablePatch>();
             SafeEnable<TacticalRangeFinderIgnoreLocalBodyPatch>();
             SafeEnable<ChangeAimingModePatch>();
+            SafeEnable<ChangeAimingModeIndexPatch>();
             SafeEnable<SetScopeModePatch>();
             SafeEnable<PlayerOnSetInHandsPatch>();
             SafeEnable<PlayerSetInventoryOpenedPatch>();
@@ -54,7 +55,9 @@ namespace PiPDisabler.Patches
             }
             catch (Exception ex)
             {
-                PiPDisablerPlugin.DebugLogError($"[Patcher] Failed to enable {typeof(T).Name}: {ex.Message}");
+                // Always logged (not gated by Debug Logging): a patch that fails to apply
+                // silently disables part of the mod and is otherwise invisible in LogOutput.log.
+                PiPDisablerPlugin.LogSource.LogError($"[Patcher] Failed to enable {typeof(T).Name}: {ex.Message}");
             }
         }
     }

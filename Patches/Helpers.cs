@@ -66,88 +66,9 @@ namespace PiPDisabler
             return pwa != null ? pwa.HeadBobbing : Settings.BaselineFOV.Value;
         }
 
-        private static readonly System.Reflection.FieldInfo EventsConsumersField =
-            HarmonyLib.AccessTools.Field(typeof(FirearmsAnimator), "_playerEventsConsumers")
-            ?? HarmonyLib.AccessTools.Field(typeof(FirearmsAnimator), "EventsConsumers")
-            ?? HarmonyLib.AccessTools.Field(typeof(FirearmsAnimator), "_eventsConsumers");
-
+        // 4.1: the consumer list is the public ObjectInHandsAnimator._eventsConsumers field.
         internal static System.Collections.IEnumerable GetEventsConsumers(this FirearmsAnimator fa)
-        {
-            if (fa == null || EventsConsumersField == null) return null;
-            try { return EventsConsumersField.GetValue(fa) as System.Collections.IEnumerable; } catch { return null; }
-        }
-
-        private static readonly System.Reflection.FieldInfo ManagerRtField =
-            HarmonyLib.AccessTools.Field(typeof(EFT.CameraControl.OpticCameraManager), "renderTexture_0")
-            ?? HarmonyLib.AccessTools.Field(typeof(EFT.CameraControl.OpticCameraManager), "RenderTexture_0")
-            ?? HarmonyLib.AccessTools.Field(typeof(EFT.CameraControl.OpticCameraManager), "_renderTexture");
-
-        private static readonly System.Reflection.PropertyInfo ManagerRtProp =
-            HarmonyLib.AccessTools.Property(typeof(EFT.CameraControl.OpticCameraManager), "RenderTexture_0")
-            ?? HarmonyLib.AccessTools.Property(typeof(EFT.CameraControl.OpticCameraManager), "RenderTexture");
-
-        internal static RenderTexture GetRenderTexture(this EFT.CameraControl.OpticCameraManager manager)
-        {
-            if (manager == null) return null;
-            try
-            {
-                if (ManagerRtProp != null) return ManagerRtProp.GetValue(manager) as RenderTexture;
-                if (ManagerRtField != null) return ManagerRtField.GetValue(manager) as RenderTexture;
-            }
-            catch { }
-            return manager.Camera != null ? manager.Camera.targetTexture : null;
-        }
-
-        internal static void SetRenderTexture(this EFT.CameraControl.OpticCameraManager manager, RenderTexture rt)
-        {
-            if (manager == null) return;
-            try
-            {
-                if (ManagerRtProp != null && ManagerRtProp.CanWrite) ManagerRtProp.SetValue(manager, rt);
-                else ManagerRtField?.SetValue(manager, rt);
-            }
-            catch { }
-        }
-
-        private static readonly System.Reflection.FieldInfo UpdaterField =
-            HarmonyLib.AccessTools.Field(typeof(EFT.CameraControl.OpticCameraManager), "OpticComponentUpdater_0")
-            ?? HarmonyLib.AccessTools.Field(typeof(EFT.CameraControl.OpticCameraManager), "_updater")
-            ?? HarmonyLib.AccessTools.Field(typeof(EFT.CameraControl.OpticCameraManager), "_opticComponentUpdater");
-
-        private static readonly System.Reflection.PropertyInfo UpdaterProp =
-            HarmonyLib.AccessTools.Property(typeof(EFT.CameraControl.OpticCameraManager), "OpticComponentUpdater_0")
-            ?? HarmonyLib.AccessTools.Property(typeof(EFT.CameraControl.OpticCameraManager), "OpticComponentUpdater");
-
-        internal static OpticComponentUpdater GetOpticComponentUpdater(this EFT.CameraControl.OpticCameraManager manager)
-        {
-            if (manager == null) return null;
-            try
-            {
-                if (UpdaterProp != null) return UpdaterProp.GetValue(manager) as OpticComponentUpdater;
-                if (UpdaterField != null) return UpdaterField.GetValue(manager) as OpticComponentUpdater;
-            }
-            catch { }
-            return manager.Camera != null ? manager.Camera.GetComponent<OpticComponentUpdater>() : null;
-        }
-
-        private static int _opticTexId = -1;
-        internal static int GetOpticTexPropertyId()
-        {
-            if (_opticTexId == -1)
-            {
-                try
-                {
-                    var f = HarmonyLib.AccessTools.Field(typeof(EFT.CameraControl.OpticCameraManager), "_camTexId")
-                         ?? HarmonyLib.AccessTools.Field(typeof(EFT.CameraControl.OpticCameraManager), "Int_0")
-                         ?? HarmonyLib.AccessTools.Field(typeof(EFT.CameraControl.OpticCameraManager), "_renderTextureId")
-                         ?? HarmonyLib.AccessTools.Field(typeof(EFT.CameraControl.OpticCameraManager), "_opticTexId");
-                    if (f != null) _opticTexId = (int)f.GetValue(null);
-                }
-                catch { }
-                if (_opticTexId == -1) _opticTexId = Shader.PropertyToID("_CamTex");
-            }
-            return _opticTexId;
-        }
+            => fa?._eventsConsumers;
 
         private static Transform FindModeAncestor(Transform t)
         {

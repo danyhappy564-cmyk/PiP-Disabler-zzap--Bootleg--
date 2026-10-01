@@ -24,7 +24,7 @@ namespace PiPDisabler.Patches
             if (manager == null || manager.Camera == null)
                 return;
 
-            if (manager.GetRenderTexture() != null && manager.Camera.targetTexture != null)
+            if (manager._renderTexture != null && manager.Camera.targetTexture != null)
                 return;
 
             try
@@ -54,7 +54,8 @@ namespace PiPDisabler.Patches
                 if (opticSight.CameraData != null)
                 {
                     manager.OpticRetrice?.SetOpticSight(opticSight);
-                    manager.GetOpticComponentUpdater()?.CopyComponentFromOptic(opticSight);
+                    if (manager.Updater != null)
+                        manager.Updater.CopyComponentFromOptic(opticSight);
                 }
 
                 global::PiPDisabler.PiPDisabler.ForceLensFade(opticSight, false);
@@ -85,15 +86,15 @@ namespace PiPDisabler.Patches
                 if (manager.Camera != null)
                     manager.Camera.targetTexture = null;
 
-                var rt = manager.GetRenderTexture();
+                var rt = manager._renderTexture;
                 if (rt != null)
                 {
                     rt.Release();
                     UnityEngine.Object.Destroy(rt);
-                    manager.SetRenderTexture(null);
+                    manager._renderTexture = null;
                 }
 
-                Shader.SetGlobalTexture(Helpers.GetOpticTexPropertyId(), null);
+                Shader.SetGlobalTexture(EFT.CameraControl.OpticCameraManager._camTexId, null);
             }
             catch (Exception ex)
             {
@@ -128,8 +129,8 @@ namespace PiPDisabler.Patches
                 __instance.CurrentOpticSight = null;
                 __instance.OpticRetrice?.SetOpticSight(null);
 
-                if (opticSight?.CameraData != null)
-                    __instance.GetOpticComponentUpdater()?.CopyComponentFromOptic(opticSight);
+                if (opticSight?.CameraData != null && __instance.Updater != null)
+                    __instance.Updater.CopyComponentFromOptic(opticSight);
 
                 if (__instance.Camera != null)
                     __instance.Camera.gameObject.SetActive(true);
@@ -167,7 +168,9 @@ namespace PiPDisabler.Patches
     internal sealed class CameraClassOnOpticEnabled_NoPipPatch : ModulePatch
     {
         protected override MethodBase GetTargetMethod()
-            => AccessTools.Method(typeof(EFT.CameraControl.OpticCameraManager), "method_10");
+            // 4.1: method_10 lives on CameraManager (subscribed to OpticCameraManager.OnOpticEnabled),
+            // not on OpticCameraManager. Targeting the wrong type made this patch silently fail.
+            => AccessTools.Method(typeof(CameraManager), "method_10");
 
         [PatchPrefix]
         private static bool Prefix()

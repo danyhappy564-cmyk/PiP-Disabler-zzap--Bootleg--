@@ -44,6 +44,9 @@ namespace PiPDisabler
         private static Matrix4x4  _shadowMatrix = Matrix4x4.identity;
         private static bool       _shadowActive;
         private static bool       _effectsVisible;
+
+        /// <summary>True after Show() until Hide()/OnScopeExit()/Cleanup().</summary>
+        public static bool IsVisible => _effectsVisible;
         private static bool       _persistShadowUntilFovRestore;
 
         // ── Outside-scope dual Kawase blur ────────────────────────────────

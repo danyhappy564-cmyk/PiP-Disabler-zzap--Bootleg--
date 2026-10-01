@@ -322,6 +322,14 @@ namespace PiPDisabler
         /// </summary>
         public static bool IsAlignmentActive => _alignmentActive && _settled;
 
+        /// <summary>True while the reticle CommandBuffer is attached and active.</summary>
+        public static bool IsShowing => _alignmentActive && _cmdBuffer != null;
+
+        /// <summary>True when a reticle was extracted for the current optic (Show() can succeed).</summary>
+        public static bool HasReticle =>
+            (_reticleSource == ReticleSource.Texture && _savedMarkTex != null) ||
+            (_reticleSource == ReticleSource.Mesh && _savedScopeReticle != null);
+
         /// <summary>
         /// Returns the current optic transform (for ScopeEffectsRenderer to
         /// share camera alignment).
