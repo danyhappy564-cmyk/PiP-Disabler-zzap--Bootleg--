@@ -559,12 +559,56 @@ namespace PiPDisabler
 
         // ── onPreCull — camera alignment + rebuild CommandBuffer ─────────────
 
+        // Frame in which the main camera was already scope-aligned (see ChildCameraPreCull).
+        private static int _alignedFrame = -1;
+
         private static void OnPreCullCallback(Camera cam)
         {
-            if (cam != _attachedCamera) return;
+            if (cam != _attachedCamera)
+            {
+                ChildCameraPreCull(cam);
+                return;
+            }
             if (_cmdBuffer == null || !_settled) return;
             if (GetActiveReticleMesh() == null || GetActiveReticleMaterial() == null) return;
 
+            // Already aligned earlier this frame by a child camera's pre-cull; nothing moves the
+            // transform between camera renders, so aligning again would only re-run the blend.
+            if (_alignedFrame != Time.frameCount)
+                AlignCameraToScope(cam);
+            _alignedFrame = -1;
+
+            RebuildMatrix(cam);
+            RebuildCommandBuffer(cam);
+        }
+
+        /// <summary>
+        /// Cameras parented to the main camera (e.g. COTI's clip-on thermal camera) render BEFORE it
+        /// and inherit its transform. Without this they captured the main camera's pre-alignment
+        /// rotation and, while zoomed, their image visibly drifted off the scene. Align the main
+        /// camera first and copy its (zoomed) FOV so the child renders the same view.
+        /// </summary>
+        private static void ChildCameraPreCull(Camera cam)
+        {
+            if (cam == null || _attachedCamera == null) return;
+            if (_cmdBuffer == null || !_settled || !_alignmentActive) return;
+            if (GetActiveReticleMesh() == null || GetActiveReticleMaterial() == null) return;
+            if (!cam.transform.IsChildOf(_attachedCamera.transform)) return;
+
+            if (_alignedFrame != Time.frameCount)
+            {
+                AlignCameraToScope(_attachedCamera);
+                _alignedFrame = Time.frameCount;
+            }
+
+            // The main camera's FOV is driven by a SetFov coroutine that runs after Update, so a
+            // child that copies it in Update is one frame behind during zoom transitions.
+            if (!Mathf.Approximately(cam.fieldOfView, _attachedCamera.fieldOfView))
+                cam.fieldOfView = _attachedCamera.fieldOfView;
+        }
+
+        private static void AlignCameraToScope(Camera cam)
+        {
             // ── Camera alignment ─────────────────────────────────────────
             // Override the camera's rotation to look exactly where the scope
             // points.  This happens in onPreCull — after all game systems
@@ -651,9 +695,6 @@ namespace PiPDisabler
                     }
                 }
             }
-
-            RebuildMatrix(cam);
-            RebuildCommandBuffer(cam);
         }
 
         private static bool IsFireReloadStateActive()
