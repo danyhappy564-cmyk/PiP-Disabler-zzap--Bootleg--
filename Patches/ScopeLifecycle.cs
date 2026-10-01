@@ -1051,7 +1051,7 @@ namespace PiPDisabler
             try
             {
                 if (_modBypassedForCurrentScope) return;
-                if (!CameraClass.Exist) return;
+                if (!CameraManager.Exist) return;
 
                 float zoomBaseFov = FovController.MagnificationBaselineFov;
                 float zoomedFov = FovController.ComputeZoomedFov();
@@ -1069,7 +1069,7 @@ namespace PiPDisabler
                         return;
 
                     FovController.TrackAppliedFov(zoomedFov);
-                    CameraClass.Instance.SetFov(zoomedFov, duration, false);
+                    CameraManager.Instance.SetFov(zoomedFov, duration, false);
                     FreelookTracker.CacheAppliedFov(zoomedFov);
                     PiPDisablerPlugin.DebugLogInfo(
                         $"[ScopeLifecycle] ApplyFov: {zoomedFov:F1}° dur={duration:F2}s");
@@ -1080,7 +1080,7 @@ namespace PiPDisabler
                     // restore to baseline with configured duration so both directions are consistent
                     float duration = Settings.FovAnimationDuration.Value;
                     FovController.TrackAppliedFov(zoomBaseFov);
-                    CameraClass.Instance.SetFov(zoomBaseFov, duration, false);
+                    CameraManager.Instance.SetFov(zoomBaseFov, duration, false);
                     FreelookTracker.CacheAppliedFov(zoomBaseFov);
                     PiPDisablerPlugin.DebugLogInfo(
                         $"[ScopeLifecycle] ApplyFov (restore baseline): {zoomBaseFov:F1}° dur={duration:F2}s");
@@ -1100,8 +1100,8 @@ namespace PiPDisabler
         {
             try
             {
-                if (!CameraClass.Exist) return;
-                var cc = CameraClass.Instance;
+                if (!CameraManager.Exist) return;
+                var cc = CameraManager.Instance;
                 if (cc == null) return;
 
                 var player = GetLocalPlayer();
@@ -1109,7 +1109,7 @@ namespace PiPDisabler
                 var pwa = player.ProceduralWeaponAnimation;
                 if (pwa == null) return;
 
-                float baseFov = pwa.Single_2;
+                float baseFov = pwa.GetBaseFov();
                 float targetFov = _restoreOneXFovOnScopeExit
                     ? Mathf.Max(1f, baseFov - 15f)
                     : baseFov;

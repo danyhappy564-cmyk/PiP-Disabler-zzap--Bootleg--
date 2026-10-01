@@ -33,8 +33,8 @@ namespace PiPDisabler.Patches
             float fov = 0f;
             try
             {
-                if (CameraClass.Exist && CameraClass.Instance != null)
-                    fov = CameraClass.Instance.Fov;
+                if (CameraManager.Exist && CameraManager.Instance != null)
+                    fov = CameraManager.Instance.Fov;
             }
             catch { }
 
@@ -50,10 +50,17 @@ namespace PiPDisabler.Patches
 
         private static CameraLodBiasController GetMainController()
         {
+            if (_controller != null) return _controller;
+
             try
             {
-                if (CameraClass.Exist && CameraClass.Instance != null)
-                    _controller = CameraClass.Instance.CameraLodBiasController_0;
+                if (CameraManager.Exist && CameraManager.Instance != null)
+                {
+                    var prop = AccessTools.Property(typeof(CameraManager), "CameraLodBiasController")
+                            ?? AccessTools.Property(typeof(CameraManager), "CameraLodBiasController_0");
+                    if (prop != null)
+                        _controller = prop.GetValue(CameraManager.Instance) as CameraLodBiasController;
+                }
             }
             catch { }
 

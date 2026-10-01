@@ -829,6 +829,21 @@ namespace PiPDisabler
             var fullScreenMatrix = Matrix4x4.TRS(
                 Vector3.zero, Quaternion.identity, new Vector3(2f, 2f, 1f));
 
+            Material activeMat = GetActiveReticleMaterial();
+            if (activeMat != null && _hasStencilSupport)
+            {
+                if (useStencil)
+                {
+                    activeMat.SetFloat("_Stencil", 1f);
+                    activeMat.SetFloat("_StencilComp", (float)CompareFunction.Equal);
+                }
+                else
+                {
+                    activeMat.SetFloat("_Stencil", 0f);
+                    activeMat.SetFloat("_StencilComp", (float)CompareFunction.Always);
+                }
+            }
+
             if (useStencil)
             {
                 AppendLensStencilMask(_cmdBuffer, _reticleMesh, cam);
@@ -862,7 +877,7 @@ namespace PiPDisabler
         public static bool AppendReticleForNvgLensBlur(CommandBuffer cmd, Rect viewport)
         {
             if (!ScopeEffectsRenderer.IsNvgLensFocalBlurActive) return false;
-            if (cmd == null || !HasLensStencilMask) return false;
+            if (cmd == null) return false;
             if (GetActiveReticleMesh() == null || GetActiveReticleMaterial() == null) return false;
 
             _reticlePixelSize = GetClipPixelSize(viewport);
@@ -878,8 +893,6 @@ namespace PiPDisabler
 
         private static void DrawActiveReticle(CommandBuffer cmd)
         {
-            if (!HasLensStencilMask) return;
-
             Mesh mesh = GetActiveReticleMesh();
             Material material = GetActiveReticleMaterial();
             if (cmd == null || mesh == null || material == null) return;
@@ -1110,21 +1123,40 @@ namespace PiPDisabler
             if (_afterNvgShaderBundle == null)
             {
                 string pluginDir = Path.GetDirectoryName(typeof(PiPDisablerPlugin).Assembly.Location);
-                string bundlePath = Path.Combine(pluginDir ?? string.Empty, AfterNvgReticleBundleName);
-                if (File.Exists(bundlePath))
-                    _afterNvgShaderBundle = AssetBundle.LoadFromFile(bundlePath);
+                string[] possiblePaths = new[]
+                {
+                    Path.Combine(pluginDir ?? string.Empty, AfterNvgReticleBundleName),
+                    Path.Combine(pluginDir ?? string.Empty, "Shaders", AfterNvgReticleBundleName),
+                    Path.Combine(pluginDir ?? string.Empty, "Resources", "Shaders", AfterNvgReticleBundleName)
+                };
+
+                foreach (var bundlePath in possiblePaths)
+                {
+                    if (File.Exists(bundlePath))
+                    {
+                        try
+                        {
+                            _afterNvgShaderBundle = AssetBundle.LoadFromFile(bundlePath);
+                            if (_afterNvgShaderBundle != null)
+                                break;
+                        }
+                        catch { }
+                    }
+                }
             }
 
-            if (_afterNvgShaderBundle == null)
-                return null;
-
-            foreach (Shader bundledShader in _afterNvgShaderBundle.LoadAllAssets<Shader>())
+            if (_afterNvgShaderBundle != null)
             {
-                if (bundledShader != null && bundledShader.name == AfterNvgReticleShaderName)
-                    return bundledShader;
+                foreach (Shader bundledShader in _afterNvgShaderBundle.LoadAllAssets<Shader>())
+                {
+                    if (bundledShader != null && bundledShader.name == AfterNvgReticleShaderName)
+                        return bundledShader;
+                }
             }
 
-            return null;
+            return Shader.Find("UI/Default") ??
+                   Shader.Find("Sprites/Default") ??
+                   Shader.Find("Unlit/Transparent");
         }
 
         private static void EnsureMeshReticleMaterial()
