@@ -60,14 +60,14 @@ namespace PiPDisabler
                     PiPDisablerPlugin.DebugLogInfo(
                         $"[FovController] variable template FOV={variableFov:F2} deg t={smoothT:F3}");
                 }
-                return CompressHighMagnificationFov(variableFov);
+                return variableFov;
             }
 
             float magnification = GetEffectiveMagnification();
             float oneXTargetFov = GetOneXTargetFov();
             float resultFov = magnification <= 1.01f
                 ? oneXTargetFov
-                : CompressHighMagnificationFov(MagnificationToFov(magnification, MagnificationBaselineFov));
+                : MagnificationToFov(magnification, MagnificationBaselineFov);
 
             // Log on change
             string source = _lastLoggedSource ?? "?";
@@ -197,27 +197,6 @@ namespace PiPDisabler
         /// Converts magnification to main-camera vertical FOV.
         ///   resultFov = 2 * atan(tan(baseFov/2) / magnification)
         /// </summary>
-        /// <summary>
-        /// Tones down magnification above HighMagCompressionStart: m' = start * (m / start)^curve.
-        /// High-power scopes otherwise narrow the whole screen to a degree or two. Below the start
-        /// nothing changes, and variable scopes keep their relative steps.
-        /// </summary>
-        public static float CompressHighMagnificationFov(float fov)
-        {
-            float start = Settings.HighMagCompressionStart.Value;
-            float curve = Mathf.Clamp(Settings.HighMagCompressionCurve.Value, 0.2f, 1f);
-            if (start >= 29.99f || curve >= 0.999f || fov <= 0.1f)
-                return fov;
-
-            float baseFov = MagnificationBaselineFov;
-            float mag = FovToMagnification(fov, baseFov);
-            if (mag <= start)
-                return fov;
-
-            float compressed = start * Mathf.Pow(mag / start, curve);
-            return MagnificationToFov(compressed, baseFov);
-        }
-
         public static float MagnificationToFov(float magnification, float baseFov)
         {
             if (magnification < 0.1f) magnification = 1f;
