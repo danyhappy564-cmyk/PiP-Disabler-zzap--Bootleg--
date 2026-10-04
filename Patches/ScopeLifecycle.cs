@@ -301,12 +301,14 @@ namespace PiPDisabler
                 if (IsPlayerSprinting(player))
                 {
                     ArmPostSprintAimGate();
+                    _aimStartTime = -1f;
                     reason = "sprinting";
                     goto evaluate;
                 }
 
                 bool isAiming = _getIsAiming(pwa);
-                if (!isAiming) { reason = "not aiming"; goto evaluate; }
+                if (!isAiming) { _aimStartTime = -1f; reason = "not aiming"; goto evaluate; }
+                if (_aimStartTime < 0f) _aimStartTime = Time.realtimeSinceStartup;
 
                 if (Settings.BypassDuringStanceTransitions.Value && IsStanceTransitionActive(player))
                 {
@@ -340,7 +342,12 @@ namespace PiPDisabler
                     goto evaluate;
                 }
 
-                if (ShouldApplyScopeAlignmentGate() && !IsScopeAlignedWithMainCamera(currentScope, enabledOs, out float scopeAngle, out float tolerance))
+                // Wait-for-ADS gate: don't start zooming while the weapon is still rising, or the
+                // magnified view flies through the scope body. Only before entering, and capped.
+                bool adsGate = !_isScoped
+                               && Settings.WaitForAdsBeforeZoom.Value
+                               && Time.realtimeSinceStartup - _aimStartTime < AdsGateTimeout;
+                if ((ShouldApplyScopeAlignmentGate() || adsGate) && !IsScopeAlignedWithMainCamera(currentScope, enabledOs, out float scopeAngle, out float tolerance))
                 {
                     reason = $"scope axis angle {scopeAngle:F2}° exceeds tolerance {tolerance:F2}°";
                     goto evaluate;
@@ -1079,7 +1086,7 @@ namespace PiPDisabler
             // Also clear any pending post-exit restore from a previous scope session.
             _postExitRestoreFov = 0f;
             FovController.OnModeSwitch();
-            ApplyFov(true);
+            ApplyFov(true, isScopeEnter: true);
 
             // 9. MagicOpticMount device in front of this optic → its effect on the main camera.
             Patches.MagicOpticMountCompat.OnScopeEnter(os);
@@ -1171,7 +1178,30 @@ namespace PiPDisabler
         /// Apply the FOV zoom for the current scope, with configurable animation duration.
         /// isTransition=true uses FovAnimationDuration config (scope enter / mode switch).
         /// </summary>
-        private static void ApplyFov(bool isTransition)
+        private static float _aimStartTime = -1f;
+        private const float AdsGateTimeout = 0.6f;
+        private const float InstantFovDuration = 0.001f;
+
+        private static float EnterExitFovDuration => ScopedFovDuration(Settings.FovAnimationDuration.Value);
+
+        /// <summary>
+        /// CameraManager.SetFov, but an instant change lands this frame: the game's SetFov coroutine
+        /// only writes the target on its next step, which left one frame of zoomed FOV with the
+        /// weapon already rescaled (a one-frame flash of an oversized scope).
+        /// </summary>
+        internal static void SetCameraFov(CameraManager cc, float fov, float duration, bool applyFovOnCamera)
+        {
+            cc.SetFov(fov, duration, applyFovOnCamera);
+            if (duration > InstantFovDuration) return;
+            cc.Fov = fov; // raises OnFovChanged → weapon scale follows in the same frame
+            if (cc.Camera != null) cc.Camera.fieldOfView = fov;
+        }
+
+        /// <summary>Duration for a mod-driven FOV change: instant when Instant Zoom is on.</summary>
+        internal static float ScopedFovDuration(float animatedDuration) =>
+            Settings.InstantScopeZoom.Value ? InstantFovDuration : animatedDuration;
+
+        private static void ApplyFov(bool isTransition, bool isScopeEnter = false)
         {
             try
             {
@@ -1185,8 +1215,8 @@ namespace PiPDisabler
                 if (zoomedFov >= 0.5f && (smoothScopeFov || zoomedFov < zoomBaseFov))
                 {
                     float duration = isTransition
-                        ? Settings.FovAnimationDuration.Value
-                        : 0.1f; // Short duration for variable zoom updates
+                        ? ScopedFovDuration(Settings.FovAnimationDuration.Value)
+                        : ScopedFovDuration(0.1f); // Short duration for variable zoom updates
 
                     // Skip if the target hasn't changed enough (prevents coroutine restarts
                     // that stall the lerp and cause flashing). Always apply on mode transitions.
@@ -1194,7 +1224,7 @@ namespace PiPDisabler
                         return;
 
                     FovController.TrackAppliedFov(zoomedFov);
-                    CameraManager.Instance.SetFov(zoomedFov, duration, false);
+                    SetCameraFov(CameraManager.Instance, zoomedFov, duration, false);
                     FreelookTracker.CacheAppliedFov(zoomedFov);
                     PiPDisablerPlugin.DebugLogInfo(
                         $"[ScopeLifecycle] ApplyFov: {zoomedFov:F1}° dur={duration:F2}s");
@@ -1204,7 +1234,7 @@ namespace PiPDisabler
                     // High-to-low mode switch where new mode has no zoom:
                     // restore to baseline with configured duration so both directions are consistent.
                     // With FOV Fix Behaviour the 1x mode goes back to the game's FOV (upstream 2.0).
-                    float duration = Settings.FovAnimationDuration.Value;
+                    float duration = ScopedFovDuration(Settings.FovAnimationDuration.Value);
                     float targetFov = zoomBaseFov;
                     if (Settings.FOVFixBehaviour.Value)
                     {
@@ -1213,7 +1243,7 @@ namespace PiPDisabler
                     }
                     zoomBaseFov = targetFov;
                     FovController.TrackAppliedFov(zoomBaseFov);
-                    CameraManager.Instance.SetFov(zoomBaseFov, duration, false);
+                    SetCameraFov(CameraManager.Instance, zoomBaseFov, duration, false);
                     FreelookTracker.CacheAppliedFov(zoomBaseFov);
                     PiPDisablerPlugin.DebugLogInfo(
                         $"[ScopeLifecycle] ApplyFov (restore baseline): {zoomBaseFov:F1}° dur={duration:F2}s");
@@ -1248,14 +1278,14 @@ namespace PiPDisabler
                     : baseFov;
                 if (targetFov > 30f)
                 {
-                    float duration = Settings.FovAnimationDuration.Value;
+                    float duration = EnterExitFovDuration;
                     // Arm the post-exit suppressor BEFORE calling SetFov so that any
                     // concurrent method_23 tick in the same frame is already blocked.
                     _postExitRestoreFov = targetFov;
                     float suppressFor = Mathf.Max(duration, 0.05f) + 0.05f;
                     _postExitRestoreExpiry = Time.realtimeSinceStartup + suppressFor;
                     FovController.TrackAppliedFov(targetFov);
-                    cc.SetFov(targetFov, duration, true);
+                    SetCameraFov(cc, targetFov, duration, true);
                     PiPDisablerPlugin.DebugLogInfo(
                         $"[ScopeLifecycle] RestoreFov: {targetFov:F1}° dur={duration:F2}s suppress={suppressFor:F2}s");
                 }

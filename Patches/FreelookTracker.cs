@@ -157,8 +157,8 @@ namespace PiPDisabler
                 try
                 {
                     if (CameraManager.Exist && CameraManager.Instance != null)
-                        CameraManager.Instance.SetFov(fovToRestore,
-                            Settings.FovAnimationDuration.Value, false);
+                        ScopeLifecycle.SetCameraFov(CameraManager.Instance, fovToRestore,
+                            ScopeLifecycle.ScopedFovDuration(Settings.FovAnimationDuration.Value), false);
                 }
                 catch { }
             }
@@ -219,6 +219,7 @@ namespace PiPDisabler
                         $"{fovToRestore:F1}° (pre-freelook snapshot)");
 
                     targetFov = fovToRestore;
+                    duration = ScopeLifecycle.ScopedFovDuration(duration);
                 }
             }
 

@@ -22,6 +22,8 @@ namespace PiPDisabler
         public static ConfigEntry<KeyCode> ScopeWhitelistToggleEntryKey;
         public static ConfigEntry<float> ScopeAlignmentAngleTolerance;
         public static ConfigEntry<float> HighMagCompressionStart;
+        public static ConfigEntry<bool> InstantScopeZoom;
+        public static ConfigEntry<bool> WaitForAdsBeforeZoom;
         public static ConfigEntry<float> HighMagCompressionCurve;
         public static ConfigEntry<bool> KeepScopeCenteredWithZeroing;
         public static ConfigEntry<float> PostSprintAimGateDuration;
@@ -230,6 +232,16 @@ namespace PiPDisabler
                 new ConfigDescription(
                     "How strongly magnification above the start value is toned down. 1 = not at all, 0.5 = square root (25x on a start of 6 becomes ~12x), lower = flatter.",
                     new AcceptableValueRange<float>(0.2f, 1f),
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
+            ConfigEntries.Add(InstantScopeZoom = config.Bind("General", "Instant Zoom In/Out", true,
+                new ConfigDescription(
+                    "Switch every zoom change instantly (entering/leaving the scope, magnification and stance changes). The whole screen is zoomed and the weapon shrunk to compensate, so an animated zoom shows the scope body growing/shrinking and the view passing through it. Off = animated with FOV Animation Duration.",
+                    null,
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
+            ConfigEntries.Add(WaitForAdsBeforeZoom = config.Bind("General", "Wait For ADS Before Zoom", true,
+                new ConfigDescription(
+                    "Start the zoom only once the scope has come up in front of the eye (aligned within the alignment tolerance, max 0.6 s), instead of while the weapon is still rising.",
+                    null,
                     new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(FovAnimationDuration = config.Bind("General", "FOV Animation Duration", 0.35f,
                 new ConfigDescription(

@@ -83,7 +83,7 @@ namespace PiPDisabler.Patches
                     {
                         FovController.TrackAppliedFov(zoomedFov);
                         FreelookTracker.CacheAppliedFov(zoomedFov);
-                        cameraClass.SetFov(zoomedFov, duration, false);
+                        ScopeLifecycle.SetCameraFov(cameraClass, zoomedFov, ScopeLifecycle.ScopedFovDuration(duration), false);
                     }
                     return;
                 }
