@@ -322,6 +322,18 @@ namespace PiPDisabler
         /// </summary>
         public static bool IsAlignmentActive => _alignmentActive && _settled;
 
+        /// <summary>
+        /// Re-adds the reticle CommandBuffer so it runs last within its camera event. Used after
+        /// another buffer has been reordered in front of it (COTI lens-only compatibility).
+        /// </summary>
+        internal static void MoveToEndOfEvent()
+        {
+            if (_attachedCamera == null || _cmdBuffer == null) return;
+            try { _attachedCamera.RemoveCommandBuffer(_attachedEvent, _cmdBuffer); }
+            catch (System.Exception) { }
+            _attachedCamera.AddCommandBuffer(_attachedEvent, _cmdBuffer);
+        }
+
         /// <summary>True while the reticle CommandBuffer is attached and active.</summary>
         public static bool IsShowing => _alignmentActive && _cmdBuffer != null;
 

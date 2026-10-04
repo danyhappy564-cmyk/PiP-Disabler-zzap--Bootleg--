@@ -120,6 +120,8 @@ namespace PiPDisabler
         public static ConfigEntry<bool> ForceRecoilReturnToZero;
         // --- Debug ---
         public static ConfigEntry<bool> DebugLogging;
+        public static ConfigEntry<bool> CotiThermalLensOnly;
+        public static ConfigEntry<bool> CotiLensOnlyFlipY;
         public static ConfigEntry<bool> DebugReticleAfterEverything;
 
 
@@ -619,6 +621,17 @@ namespace PiPDisabler
                     "Multiplier for the NVG lens blur, higher means more blurrr.",
                     new AcceptableValueRange<float>(1f, 6f),
                     new ConfigurationManagerAttributes { IsAdvanced = false, ShowRangeAsPercent = false })));
+            // --- Compatibility ---
+            ConfigEntries.Add(CotiThermalLensOnly = config.Bind("Compatibility", "COTI thermal only inside lens", true,
+                new ConfigDescription(
+                    "With the COTI clip-on thermal running, show its heat only through the scope lens (like COTI does with vanilla PiP scopes). Off = heat outside the lens is only darkened by the scope shadow.",
+                    null,
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
+            ConfigEntries.Add(CotiLensOnlyFlipY = config.Bind("Compatibility", "COTI lens-only flip Y", false,
+                new ConfigDescription(
+                    "Only if the view around the scope looks upside down while COTI thermal is on: flips the restored outside-lens image.",
+                    null,
+                    new ConfigurationManagerAttributes { IsAdvanced = true })));
             // --- Debug ---
             ConfigEntries.Add(DebugLogging = config.Bind("Debug", "Debug logging", false,
                 new ConfigDescription(

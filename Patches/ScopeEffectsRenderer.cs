@@ -101,6 +101,12 @@ namespace PiPDisabler
         private const string LateOverlayBufferPrefix = "COTI";
         private const int LateOverlayCheckInterval = 10;
         private static CommandBuffer _postCmdBuffer;
+        private static CommandBuffer _preCmdBuffer;   // grabs the frame right before COTI (lens-only mode)
+        private static Material      _restoreMat;     // own instance: _outsideBlurMat state is shared with the blur
+        private static bool          _restoreMatFailed;
+        private static readonly int  PreOverlayGrabId = Shader.PropertyToID("_PiPDisablerPreOverlayGrab");
+        private const int RestoreBackgroundPass = 2;  // CompositeBackground (stencil 0)
+        private const int RestoreScopeBodyPass = 3;   // CompositeScopeBody (stencil 2)
         private static Camera        _postAttachedCamera;
         private static bool          _lateOverlayPresent;
         private static int           _nextLateOverlayCheckFrame;
@@ -228,6 +234,7 @@ namespace PiPDisabler
             // does not force expensive re-attachment/rebuild work in the same frame.
             _cmdBuffer?.Clear();
             _postCmdBuffer?.Clear();
+            _preCmdBuffer?.Clear();
         }
 
         public static bool OnScopeExit(bool allowShadowPersist)
@@ -409,6 +416,7 @@ namespace PiPDisabler
             {
                 _cmdBuffer.Clear();
                 _postCmdBuffer?.Clear();
+                _preCmdBuffer?.Clear();
                 return;
             }
 
@@ -423,6 +431,7 @@ namespace PiPDisabler
             {
                 _cmdBuffer.Clear();
                 _postCmdBuffer?.Clear();
+                _preCmdBuffer?.Clear();
                 return;
             }
 
@@ -498,7 +507,7 @@ namespace PiPDisabler
 
             // Draw shadow first (behind vignette in render order).
             // With a late overlay present it is drawn after that overlay instead (see below).
-            if (!_lateOverlayPresent && _shadowActive && useStencil && _shadowMat != null && _shadowMesh != null)
+            if (!(_lateOverlayPresent && !IsLensOnlyRestoreActive()) && _shadowActive && useStencil && _shadowMat != null && _shadowMesh != null)
                 _cmdBuffer.DrawMesh(_shadowMesh, _shadowMatrix, _shadowMat, 0, -1);
 
             // Draw vignette only in lens mask area
@@ -517,14 +526,48 @@ namespace PiPDisabler
         /// </summary>
         private static void RebuildPostOverlayBuffer(Camera cam, Mesh stencilMesh)
         {
+            _preCmdBuffer?.Clear();
             if (_postCmdBuffer == null) return;
             _postCmdBuffer.Clear();
 
-            if (!_lateOverlayPresent || !_shadowActive || _shadowMat == null || _shadowMesh == null)
+            if (!_lateOverlayPresent)
+                return;
+
+            Rect display = Helpers.GetDisplayViewport(cam);
+
+            if (IsLensOnlyRestoreActive() && _preCmdBuffer != null && stencilMesh != null)
+            {
+                // Lens-only: copy the frame before COTI adds its heat, then after it put that copy
+                // back everywhere except the lens (stencil 0 = background, 2 = scope body), so the
+                // heat stays only inside the lens. The scope shadow is already in the copy.
+                int w = Mathf.Max(1, Mathf.RoundToInt(display.width));
+                int h = Mathf.Max(1, Mathf.RoundToInt(display.height));
+                var format = cam.allowHDR ? RenderTextureFormat.DefaultHDR : RenderTextureFormat.Default;
+                _preCmdBuffer.GetTemporaryRT(PreOverlayGrabId, w, h, 0, FilterMode.Point, format);
+                _preCmdBuffer.Blit(BuiltinRenderTextureType.CameraTarget, PreOverlayGrabId);
+
+                _postCmdBuffer.SetRenderTarget(BuiltinRenderTextureType.CameraTarget);
+                _postCmdBuffer.SetViewport(display);
+                bool lensStencil = ReticleRenderer.AppendLensStencilMask(_postCmdBuffer, stencilMesh, cam);
+                if (lensStencil)
+                {
+                    _restoreMat.SetFloat(BlurFlipYId, Settings.CotiLensOnlyFlipY.Value ? 1f : 0f);
+                    _postCmdBuffer.SetGlobalTexture(BlurTextureId, PreOverlayGrabId);
+                    _postCmdBuffer.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
+                    var fullScreen = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(2f, 2f, 1f));
+                    _postCmdBuffer.DrawMesh(stencilMesh, fullScreen, _restoreMat, 0, RestoreBackgroundPass);
+                    _postCmdBuffer.DrawMesh(stencilMesh, fullScreen, _restoreMat, 0, RestoreScopeBodyPass);
+                }
+                _postCmdBuffer.ReleaseTemporaryRT(PreOverlayGrabId);
+                _postCmdBuffer.SetViewProjectionMatrices(cam.worldToCameraMatrix, cam.projectionMatrix);
+                return;
+            }
+
+            if (!_shadowActive || _shadowMat == null || _shadowMesh == null)
                 return;
 
             _postCmdBuffer.SetRenderTarget(BuiltinRenderTextureType.CameraTarget);
-            _postCmdBuffer.SetViewport(Helpers.GetDisplayViewport(cam));
+            _postCmdBuffer.SetViewport(display);
 
             bool useStencil = _hasStencilSupport &&
                               ReticleRenderer.AppendLensStencilMask(_postCmdBuffer, stencilMesh, cam);
@@ -535,6 +578,36 @@ namespace PiPDisabler
             }
 
             _postCmdBuffer.SetViewProjectionMatrices(cam.worldToCameraMatrix, cam.projectionMatrix);
+        }
+
+        /// <summary>COTI present, lens-only option on, and the restore shader is available.</summary>
+        private static bool IsLensOnlyRestoreActive()
+        {
+            if (!_lateOverlayPresent || !_hasStencilSupport || !Settings.CotiThermalLensOnly.Value)
+                return false;
+            return EnsureRestoreMaterial();
+        }
+
+        private static bool EnsureRestoreMaterial()
+        {
+            if (_restoreMat != null) return true;
+            if (_restoreMatFailed) return false;
+
+            Shader shader = FindOutsideBlurShader();
+            if (shader == null || shader.passCount <= RestoreScopeBodyPass)
+            {
+                _restoreMatFailed = true;
+                PiPDisablerPlugin.LogSource.LogWarning(
+                    "[ScopeEffects] COTI lens-only: restore shader unavailable, falling back to darkening with the scope shadow.");
+                return false;
+            }
+
+            _restoreMat = new Material(shader) { renderQueue = 3030 };
+            _restoreMat.SetFloat("_Opacity", 1f);
+            _restoreMat.SetFloat(BlurDarkeningId, 0f);
+            _restoreMat.SetFloat(BlurFlipYId, 0f);
+            _restoreMat.SetFloat("_RadialGateEnabled", 0f);
+            return true;
         }
 
         /// <summary>
@@ -549,31 +622,40 @@ namespace PiPDisabler
                 return;
             _nextLateOverlayCheckFrame = Time.frameCount + LateOverlayCheckInterval;
 
-            int overlayIndex = -1;
+            int overlayFirst = -1;
+            int overlayLast = -1;
             int ownIndex = -1;
+            int preIndex = -1;
+            CommandBuffer[] buffers = null;
             try
             {
-                CommandBuffer[] buffers = cam.GetCommandBuffers(PostOverlayCameraEvent);
+                buffers = cam.GetCommandBuffers(PostOverlayCameraEvent);
                 for (int i = 0; i < buffers.Length; i++)
                 {
                     var b = buffers[i];
                     if (b == null) continue;
                     if (_postCmdBuffer != null && ReferenceEquals(b, _postCmdBuffer))
                         ownIndex = i;
+                    else if (_preCmdBuffer != null && ReferenceEquals(b, _preCmdBuffer))
+                        preIndex = i;
                     else if (b.name != null && b.name.StartsWith(LateOverlayBufferPrefix, System.StringComparison.Ordinal))
-                        overlayIndex = i;
+                    {
+                        if (overlayFirst < 0) overlayFirst = i;
+                        overlayLast = i;
+                    }
                 }
             }
             catch (System.Exception)
             {
-                overlayIndex = -1;
+                overlayFirst = -1;
             }
+            int overlayIndex = overlayFirst;
 
             bool present = overlayIndex >= 0;
             if (present != _lateOverlayPresent)
             {
                 PiPDisablerPlugin.DebugLogInfo(
-                    $"[ScopeEffects] Late overlay (COTI) {(present ? "detected — scope shadow moves after it" : "gone — scope shadow back at scene event")}");
+                    $"[ScopeEffects] Late overlay (COTI) {(present ? (Settings.CotiThermalLensOnly.Value ? "detected — heat limited to the lens" : "detected — scope shadow moves after it") : "gone — normal scope effects")}");
             }
             _lateOverlayPresent = present;
 
@@ -584,22 +666,45 @@ namespace PiPDisabler
             }
 
             if (_postAttachedCamera != null && _postAttachedCamera != cam)
+            {
                 DetachPostOverlayBuffer();
+                _lateOverlayPresent = true; // Detach clears it; the overlay is still there on the new camera
+            }
 
             if (_postCmdBuffer == null)
                 _postCmdBuffer = new CommandBuffer { name = "ScopeEffectsPostOverlay" };
+            if (_preCmdBuffer == null)
+                _preCmdBuffer = new CommandBuffer { name = "ScopeEffectsPreOverlayGrab" };
 
-            bool needsAttach = _postAttachedCamera == null || ownIndex < 0 || ownIndex < overlayIndex;
-            if (!needsAttach) return;
+            // Wanted order within AfterEverything: [pre grab] [COTI…] [post] … [reticle last].
+            bool ordered = _postAttachedCamera == cam
+                           && preIndex >= 0 && preIndex < overlayFirst
+                           && ownIndex > overlayLast;
+            if (ordered) return;
 
             if (_postAttachedCamera != null)
             {
                 try { _postAttachedCamera.RemoveCommandBuffer(PostOverlayCameraEvent, _postCmdBuffer); }
                 catch (System.Exception) { }
+                try { _postAttachedCamera.RemoveCommandBuffer(PostOverlayCameraEvent, _preCmdBuffer); }
+                catch (System.Exception) { }
             }
 
+            // Moving COTI's own buffers is safe: COTI removes them by reference, wherever they sit.
+            cam.AddCommandBuffer(PostOverlayCameraEvent, _preCmdBuffer);
+            for (int i = 0; i < buffers.Length; i++)
+            {
+                var b = buffers[i];
+                if (b == null || b.name == null || ReferenceEquals(b, _postCmdBuffer) || ReferenceEquals(b, _preCmdBuffer)) continue;
+                if (!b.name.StartsWith(LateOverlayBufferPrefix, System.StringComparison.Ordinal)) continue;
+                cam.RemoveCommandBuffer(PostOverlayCameraEvent, b);
+                cam.AddCommandBuffer(PostOverlayCameraEvent, b);
+            }
             cam.AddCommandBuffer(PostOverlayCameraEvent, _postCmdBuffer);
             _postAttachedCamera = cam;
+
+            // Keep the reticle on top of the restored image.
+            ReticleRenderer.MoveToEndOfEvent();
         }
 
         private static void DetachPostOverlayBuffer()
@@ -608,6 +713,17 @@ namespace PiPDisabler
             {
                 try { _postAttachedCamera.RemoveCommandBuffer(PostOverlayCameraEvent, _postCmdBuffer); }
                 catch (System.Exception) { }
+            }
+            if (_postAttachedCamera != null && _preCmdBuffer != null)
+            {
+                try { _postAttachedCamera.RemoveCommandBuffer(PostOverlayCameraEvent, _preCmdBuffer); }
+                catch (System.Exception) { }
+            }
+            if (_preCmdBuffer != null)
+            {
+                _preCmdBuffer.Clear();
+                _preCmdBuffer.Release();
+                _preCmdBuffer = null;
             }
 
             if (_postCmdBuffer != null)
