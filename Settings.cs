@@ -231,9 +231,9 @@ namespace PiPDisabler
                     "How strongly magnification above the start value is toned down. 1 = not at all, 0.5 = square root (25x on a start of 6 becomes ~12x), lower = flatter.",
                     new AcceptableValueRange<float>(0.2f, 1f),
                     new ConfigurationManagerAttributes { IsAdvanced = false })));
-            ConfigEntries.Add(FovAnimationDuration = config.Bind("General", "FOV Animation Duration", 1f,
+            ConfigEntries.Add(FovAnimationDuration = config.Bind("General", "FOV Animation Duration", 0.35f,
                 new ConfigDescription(
-                    "Duration of the FOV transitions during magnification changes.",
+                    "Duration of the FOV transitions when entering/leaving the scope and changing magnification. Long values feel like flying into the scope; 0.2-0.35 matches the ADS animation, 0 = instant.",
                     new AcceptableValueRange<float>(0f, 10f),
                     new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(BypassDuringReload = config.Bind("Hacks", "Bypass during reload", true,
