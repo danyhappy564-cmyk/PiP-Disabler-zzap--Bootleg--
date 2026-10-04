@@ -760,6 +760,11 @@ namespace PiPDisabler
                 return true;
             }
 
+            if (Patches.MagicOpticMountCompat.ShouldBypass(os))
+            {
+                return true;
+            }
+
             if (ShouldBypassByWhitelist(os))
             {
                 return true;
