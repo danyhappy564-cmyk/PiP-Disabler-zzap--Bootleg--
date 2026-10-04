@@ -554,7 +554,10 @@ namespace PiPDisabler
                 bool lensStencil = ReticleRenderer.AppendLensStencilMask(_postCmdBuffer, stencilMesh, cam);
                 if (lensStencil)
                 {
-                    _restoreMat.SetFloat(BlurFlipYId, Settings.CotiLensOnlyFlipY.Value ? 1f : 0f);
+                    // Copying the back buffer and drawing it back lands upside down on APIs whose UV
+                    // origin is at the top (D3D/Vulkan/Metal) — confirmed in game on D3D11.
+                    bool flip = SystemInfo.graphicsUVStartsAtTop ^ Settings.CotiLensOnlyFlipY.Value;
+                    _restoreMat.SetFloat(BlurFlipYId, flip ? 1f : 0f);
                     _restoreMat.SetTexture(BlurTextureId, _grabRT);
                     _postCmdBuffer.SetGlobalTexture(BlurTextureId, _grabRT);
                     _postCmdBuffer.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);

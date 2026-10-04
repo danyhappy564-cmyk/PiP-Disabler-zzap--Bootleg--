@@ -21,6 +21,7 @@ namespace PiPDisabler
         public static ConfigEntry<string> ScopeWhitelistNames;
         public static ConfigEntry<KeyCode> ScopeWhitelistToggleEntryKey;
         public static ConfigEntry<float> ScopeAlignmentAngleTolerance;
+        public static ConfigEntry<bool> KeepScopeCenteredWithZeroing;
         public static ConfigEntry<float> PostSprintAimGateDuration;
         public static ConfigEntry<bool> BypassDuringStanceTransitions;
         public static ConfigEntry<float> PostStanceAimGateDuration;
@@ -182,6 +183,11 @@ namespace PiPDisabler
                 new ConfigDescription(
                     "Multiplies the scaling of all reticles, useful if you feel like the reticles are too small or too large.",
                     new AcceptableValueRange<float>(0.5f, 2f),
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
+            ConfigEntries.Add(KeepScopeCenteredWithZeroing = config.Bind("Hacks", "Keep scope centered with zeroing", true,
+                new ConfigDescription(
+                    "Aim the camera along the scope's own axis so changing the zero (range) no longer pushes the scope off screen centre; the reticle moves to the zeroed point instead. Off = old behaviour (camera follows the zeroed optic, scope drifts).",
+                    null,
                     new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(ScopeAlignmentAngleTolerance = config.Bind("Hacks", "ADS Scope Alignment Angle Tolerance", 2f,
                 new ConfigDescription(
@@ -629,7 +635,7 @@ namespace PiPDisabler
                     new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(CotiLensOnlyFlipY = config.Bind("Compatibility", "COTI lens-only flip Y", false,
                 new ConfigDescription(
-                    "Only if the view around the scope looks upside down while COTI thermal is on: flips the restored outside-lens image.",
+                    "The outside-lens image orientation is picked automatically from the graphics API. Turn this on only if the view around the scope still looks upside down while COTI thermal is on.",
                     null,
                     new ConfigurationManagerAttributes { IsAdvanced = true })));
             // --- Debug ---

@@ -615,8 +615,63 @@ namespace PiPDisabler
             }
         }
 
+        // Downrange direction of the zeroed optic when the camera is aligned to the scope's own axis
+        // instead (KeepScopeCenteredWithZeroing). Used to place the reticle at the zeroed point.
+        private static bool _zeroOffsetActive;
+        private static Vector3 _zeroedForward;
+        private const float MaxZeroCorrectionDeg = 5f;
+
+        /// <summary>
+        /// EFT zeroes a scope by tilting the optic (ScopePrefabCache.WeaponScopeAxis / ScopeData calibration),
+        /// so aligning the main camera to the optic camera tilted the whole view and pushed the scope
+        /// housing off centre as the zero went up. Returns the optic rotation with that tilt removed,
+        /// i.e. looking down the current scope bone axis (the same axis the ADS alignment gate uses),
+        /// keeping the optic's roll.
+        /// </summary>
+        private static Quaternion GetAlignmentRotation(Transform swaySource)
+        {
+            Quaternion opticRot = swaySource.rotation;
+            _zeroOffsetActive = false;
+            if (!Settings.KeepScopeCenteredWithZeroing.Value)
+                return opticRot;
+
+            try
+            {
+                var scope = Helpers.GetLocalPlayer()?.ProceduralWeaponAnimation?.CurrentScope;
+                Transform bone = scope?.Bone;
+                if (bone == null) return opticRot;
+
+                Vector3 axis = bone.name == "aim_camera" ? -bone.up : -bone.forward;
+                if (axis.sqrMagnitude < 1e-6f) return opticRot;
+
+                Vector3 opticForward = opticRot * Vector3.forward;
+                float angle = Vector3.Angle(opticForward, axis);
+                if (angle < 0.001f || angle > MaxZeroCorrectionDeg)
+                    return opticRot;
+
+                _zeroedForward = opticForward;
+                _zeroOffsetActive = true;
+                return Quaternion.FromToRotation(opticForward, axis) * opticRot;
+            }
+            catch
+            {
+                return opticRot;
+            }
+        }
+
+        /// <summary>Clip-space position of the zeroed aim point (0,0 = screen centre).</summary>
+        private static Vector2 GetZeroClipOffset(Camera cam)
+        {
+            if (!_zeroOffsetActive || cam == null) return Vector2.zero;
+            Vector3 vp = cam.WorldToViewportPoint(cam.transform.position + _zeroedForward * 100f);
+            if (vp.z <= 0f) return Vector2.zero;
+            return new Vector2(vp.x * 2f - 1f, vp.y * 2f - 1f);
+        }
+
         private static void AlignCameraToScope(Camera cam)
         {
+            _zeroOffsetActive = false; // set again by GetAlignmentRotation when aligning this frame
+
             // ── Camera alignment ─────────────────────────────────────────
             // Override the camera's rotation to look exactly where the scope
             // points.  This happens in onPreCull — after all game systems
@@ -639,6 +694,7 @@ namespace PiPDisabler
                 Transform swaySource = PiPDisabler.OpticCameraTransform ?? _opticTransform;
                 if (swaySource != null)
                 {
+                    Quaternion targetRotation = GetAlignmentRotation(swaySource);
                     bool suppressForFireReload = IsFireReloadStateActive();
                     if (suppressForFireReload)
                     {
@@ -646,7 +702,7 @@ namespace PiPDisabler
                         {
                             _fireReloadRotationEntering = true;
                             _fireReloadRotationEnterStartTime = Time.realtimeSinceStartup;
-                            _fireReloadRotationEnterStart = swaySource.rotation;
+                            _fireReloadRotationEnterStart = targetRotation;
                         }
 
                         _fireReloadRotationRecovering = false;
@@ -690,7 +746,7 @@ namespace PiPDisabler
                             t = Mathf.SmoothStep(0f, 1f, t);
                             cam.transform.rotation = Quaternion.Slerp(
                                 _fireReloadRotationRecoverStart,
-                                swaySource.rotation,
+                                targetRotation,
                                 t);
 
                             if (t >= 1f)
@@ -698,7 +754,7 @@ namespace PiPDisabler
                         }
                         else
                         {
-                            cam.transform.rotation = swaySource.rotation;
+                            cam.transform.rotation = targetRotation;
                         }
                     }
                 }
@@ -792,17 +848,22 @@ namespace PiPDisabler
                 }
 
                 Vector3 position = _savedScopeReticle.Position;
+                Vector2 zeroOffset = GetZeroClipOffset(cam);
+                position.x += zeroOffset.x;
+                position.y += zeroOffset.y;
                 position.z = 0.5f;
-                float zRotation = Mathf.Repeat(_savedScopeReticle.Rotation.z, 360f);
-                bool quarterTurnReticle = Mathf.Abs(zRotation - 90f) < 0.5f || Mathf.Abs(zRotation - 270f) < 0.5f;
-                Vector3 meshReticleScale = quarterTurnReticle
-                    ? new Vector3(meshScale, meshScale / Mathf.Max(0.01f, meshAspect), meshScale)
-                    : new Vector3(meshScale / Mathf.Max(0.01f, meshAspect), meshScale, meshScale);
-
-                _reticleMatrix = Matrix4x4.TRS(
-                    position,
+                // Vanilla draws this mesh into the square optic RT. On the wide screen the X axis must
+                // be squeezed by the aspect AFTER the reticle's own rotation. The old code squeezed a
+                // local axis chosen from Rotation.z only (0°/90°), which is wrong for reticles rotated
+                // on other axes too — e.g. Epic's AiO variable scopes use (-90, 90, 90): local X maps to
+                // screen X, local Z to screen Y, so the reticle came out ~aspect× too wide.
+                // For 0°/90°/180°/270° about Z this gives exactly the previous result.
+                Matrix4x4 rotatedReticle = Matrix4x4.TRS(
+                    Vector3.zero,
                     Quaternion.Euler(_savedScopeReticle.Rotation),
-                    meshReticleScale);
+                    new Vector3(meshScale, meshScale, meshScale));
+                Matrix4x4 aspectFix = Matrix4x4.Scale(new Vector3(1f / Mathf.Max(0.01f, meshAspect), 1f, 1f));
+                _reticleMatrix = Matrix4x4.Translate(position) * aspectFix * rotatedReticle;
                 return;
             }
 
@@ -818,7 +879,8 @@ namespace PiPDisabler
         ndcSize *= Settings.GlobalReticleScalingMultiplier.Value;
         ndcSize = Mathf.Clamp(ndcSize, 0.01f, 2f);
 
-            Vector3 pos = new Vector3(0f, 0f, 0.5f);
+            Vector2 zeroClip = GetZeroClipOffset(cam);
+            Vector3 pos = new Vector3(zeroClip.x, zeroClip.y, 0.5f);
             float aspect = GetActiveAspect(cam);
             Vector3 scale = new Vector3(ndcSize / Mathf.Max(0.01f, aspect), ndcSize, 1f);
             _reticleMatrix = Matrix4x4.TRS(pos, Quaternion.identity, scale);
