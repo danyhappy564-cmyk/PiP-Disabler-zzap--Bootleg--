@@ -586,7 +586,8 @@ namespace PiPDisabler
         /// Cameras parented to the main camera (e.g. COTI's clip-on thermal camera) render BEFORE it
         /// and inherit its transform. Without this they captured the main camera's pre-alignment
         /// rotation and, while zoomed, their image visibly drifted off the scene. Align the main
-        /// camera first and copy its (zoomed) FOV so the child renders the same view.
+        /// camera first. Only the rotation is touched: the child's projection is its owner's
+        /// business (COTI 3.2+ renders a cropped custom projectionMatrix).
         /// </summary>
         private static void ChildCameraPreCull(Camera cam)
         {
@@ -600,11 +601,6 @@ namespace PiPDisabler
                 AlignCameraToScope(_attachedCamera);
                 _alignedFrame = Time.frameCount;
             }
-
-            // The main camera's FOV is driven by a SetFov coroutine that runs after Update, so a
-            // child that copies it in Update is one frame behind during zoom transitions.
-            if (!Mathf.Approximately(cam.fieldOfView, _attachedCamera.fieldOfView))
-                cam.fieldOfView = _attachedCamera.fieldOfView;
         }
 
         private static void AlignCameraToScope(Camera cam)

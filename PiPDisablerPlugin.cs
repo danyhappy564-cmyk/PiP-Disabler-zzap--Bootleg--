@@ -15,7 +15,7 @@ namespace PiPDisabler
 
     public sealed class PiPDisablerPlugin : BaseUnityPlugin
     {
-        public const string PluginVersion = "2.0.2";
+        public const string PluginVersion = "2.0.3";
 
         public static ManualLogSource LogSource;
         internal static PiPDisablerPlugin Instance;
