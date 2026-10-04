@@ -124,6 +124,7 @@ namespace PiPDisabler
         public static ConfigEntry<bool> CotiThermalLensOnly;
         public static ConfigEntry<bool> CotiLensOnlyFlipY;
         public static ConfigEntry<bool> CotiCenterInScope;
+        public static ConfigEntry<bool> MagicOpticMountWithoutPiP;
         public static ConfigEntry<bool> DebugReticleAfterEverything;
 
 
@@ -637,6 +638,11 @@ namespace PiPDisabler
             ConfigEntries.Add(CotiCenterInScope = config.Bind("Compatibility", "COTI thermal centred in scope", true,
                 new ConfigDescription(
                     "While aiming, centre COTI's NVG tube circle on the scope so the heat fills the lens (a monocular's circle is otherwise off to one side). Needs 'COTI thermal only inside lens'. COTI renders a bigger area while aiming.",
+                    null,
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
+            ConfigEntries.Add(MagicOpticMountWithoutPiP = config.Bind("Compatibility", "MagicOpticMount without PiP", true,
+                new ConfigDescription(
+                    "With 7Bpencil's MagicOpticMount: show the thermal/NV device in front of the scope by putting its effect on the main camera while aiming (keeps the FPS saving). Off = use vanilla PiP for that scope (exactly MagicOpticMount's look, no FPS saving).",
                     null,
                     new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(CotiLensOnlyFlipY = config.Bind("Compatibility", "COTI lens-only flip Y", false,

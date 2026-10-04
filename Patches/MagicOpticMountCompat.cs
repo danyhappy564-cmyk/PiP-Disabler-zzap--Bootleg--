@@ -13,6 +13,10 @@ namespace PiPDisabler.Patches
     /// optic is bypassed so vanilla PiP (and MagicOpticMount) renders it.
     ///
     /// The alignment test mirrors MagicOpticMount's own AreSightsAligned.
+    ///
+    /// Default (MagicOpticMountWithoutPiP): instead of bypassing, the device's thermal/NV settings
+    /// are put on the main camera's own ThermalVision/NightVision components (the ones goggles
+    /// use) while scoped, and restored afterwards — the device image without the second render.
     /// </summary>
     internal static class MagicOpticMountCompat
     {
@@ -34,25 +38,32 @@ namespace PiPDisabler.Patches
 
         public static bool ShouldBypass(OpticSight os)
         {
-            if (os == null || !Installed) return false;
+            if (Settings.MagicOpticMountWithoutPiP.Value) return false;
+            return FindAlignedDevice(os) != null;
+        }
+
+        /// <summary>The aligned thermal/NV device OpticSight in front of <paramref name="os"/>, or null.</summary>
+        private static OpticSight FindAlignedDevice(OpticSight os)
+        {
+            if (os == null || !Installed) return null;
 
             try
             {
                 var player = Helpers.GetLocalPlayer();
                 var pwa = player?.ProceduralWeaponAnimation;
                 if (pwa == null || pwa.ScopeAimTransforms == null || pwa.ScopeAimTransforms.Count == 0)
-                    return false;
+                    return null;
 
                 // The device itself is thermal/NV — nothing for MagicOpticMount to add.
-                if (IsSpecialOptic(os)) return false;
+                if (IsSpecialOptic(os)) return null;
 
                 Transform opticBone = FindBoneFor(pwa, os);
-                if (opticBone == null) return false;
+                if (opticBone == null) return null;
 
                 var firearmController = player.HandsController as Player.FirearmController;
                 var weaponPrefab = firearmController?.Firearms?.WeaponPrefab;
                 var weaponRoot = weaponPrefab != null ? weaponPrefab.Hierarchy?.GetTransform(ECharacterWeaponBones.weapon) : null;
-                if (weaponRoot == null) return false;
+                if (weaponRoot == null) return null;
                 Vector3 weaponForward = -weaponRoot.up;
 
                 foreach (var sight in pwa.ScopeAimTransforms)
@@ -67,8 +78,8 @@ namespace PiPDisabler.Patches
                     if (AreSightsAligned(opticBone, sight.Bone, weaponForward))
                     {
                         PiPDisablerPlugin.DebugLogInfo(
-                            $"[MagicOpticMountCompat] '{os.name}' has an aligned thermal/NV device '{other.name}' in front — using vanilla PiP.");
-                        return true;
+                            $"[MagicOpticMountCompat] '{os.name}' has an aligned thermal/NV device '{other.name}' in front.");
+                        return other;
                     }
                 }
             }
@@ -77,7 +88,153 @@ namespace PiPDisabler.Patches
                 // fall through: never block the mod on a failed probe
             }
 
-            return false;
+            return null;
+        }
+
+        // ── Without-PiP mode: device effect on the main camera ──────────────
+
+        private struct ThermalState
+        {
+            public bool Enabled, On, IsNoisy, IsFpsStuck, IsMotionBlurred, IsGlitch, IsPixelated;
+            public ThermalVisionUtilities Utilities;
+            public StuckFPSUtilities StuckFps;
+            public MotionBlurUtilities MotionBlur;
+            public GlitchUtilities Glitch;
+            public PixelationUtilities Pixelation;
+            public float ChromaticShift, UnsharpBias, UnsharpRadius;
+        }
+
+        private struct NightState
+        {
+            public bool Enabled, On;
+            public float Intensity, NoiseIntensity, NoiseScale;
+            public Color Color;
+        }
+
+        private static ThermalVision _appliedThermal;
+        private static BSG.CameraEffects.NightVision _appliedNight;
+        private static ThermalState _savedThermal;
+        private static NightState _savedNight;
+
+        /// <summary>Called on (non-bypassed) scope enter and after a mode switch.</summary>
+        public static void OnScopeEnter(OpticSight os)
+        {
+            Restore();
+            if (!Settings.MagicOpticMountWithoutPiP.Value) return;
+
+            OpticSight device = FindAlignedDevice(os);
+            ScopeData data = device != null ? device.ScopeData : null;
+            if (data == null || !CameraManager.Exist || CameraManager.Instance == null) return;
+
+            try
+            {
+                var thermalData = data.ThermalVisionData;
+                var tv = CameraManager.Instance.ThermalVision;
+                if (thermalData != null && thermalData.ThermalVision && tv != null)
+                {
+                    _savedThermal = new ThermalState
+                    {
+                        Enabled = tv.enabled, On = tv.On, IsNoisy = tv.IsNoisy, IsFpsStuck = tv.IsFpsStuck,
+                        IsMotionBlurred = tv.IsMotionBlurred, IsGlitch = tv.IsGlitch, IsPixelated = tv.IsPixelated,
+                        Utilities = tv.ThermalVisionUtilities, StuckFps = tv.StuckFpsUtilities,
+                        MotionBlur = tv.MotionBlurUtilities, Glitch = tv.GlitchUtilities, Pixelation = tv.PixelationUtilities,
+                        ChromaticShift = tv.ChromaticAberrationThermalShift, UnsharpBias = tv.UnsharpBias, UnsharpRadius = tv.UnsharpRadiusBlur
+                    };
+
+                    // Same assignments vanilla makes on the optic camera (CopyComponentFromOptic). On is
+                    // set directly, not via Switch(), so the goggle tube mask is not switched on.
+                    tv.IsGlitch = thermalData.ThermalVisionIsGlitch;
+                    tv.IsPixelated = thermalData.ThermalVisionIsPixelated;
+                    tv.IsNoisy = thermalData.ThermalVisionIsNoisy;
+                    tv.IsMotionBlurred = thermalData.ThermalVisionIsMotionBlurred;
+                    tv.IsFpsStuck = thermalData.ThermalVisionIsFpsStuck;
+                    tv.ThermalVisionUtilities = thermalData.ThermalVisionUtilities;
+                    tv.StuckFpsUtilities = thermalData.StuckFPSUtilities;
+                    tv.MotionBlurUtilities = thermalData.MotionBlurUtilities;
+                    tv.GlitchUtilities = thermalData.GlitchUtilities;
+                    tv.PixelationUtilities = thermalData.PixelationUtilities;
+                    tv.ChromaticAberrationThermalShift = thermalData.ChromaticAberrationThermalShift;
+                    tv.UnsharpBias = thermalData.UnsharpBias;
+                    tv.UnsharpRadiusBlur = thermalData.UnsharpRadiusBlur;
+                    tv.enabled = true;
+                    tv.On = true;
+                    _appliedThermal = tv;
+                    PiPDisablerPlugin.DebugLogInfo($"[MagicOpticMountCompat] Thermal from '{device.name}' applied to the main camera.");
+                    return;
+                }
+
+                var nightData = data.NightVisionData;
+                var nv = CameraManager.Instance.NightVision;
+                if (nightData != null && nightData.NightVision && nv != null)
+                {
+                    _savedNight = new NightState
+                    {
+                        Enabled = nv.enabled, On = nv.On, Intensity = nv.Intensity,
+                        NoiseIntensity = nv.NoiseIntensity, NoiseScale = nv.NoiseScale, Color = nv.Color
+                    };
+                    nv.Intensity = nightData.Intensity;
+                    nv.NoiseIntensity = nightData.NoiseIntensity;
+                    nv.NoiseScale = nightData.NoiseScale;
+                    nv.Color = nightData.Color;
+                    nv.enabled = true;
+                    nv.On = true;
+                    nv.ApplySettings();
+                    _appliedNight = nv;
+                    PiPDisablerPlugin.DebugLogInfo($"[MagicOpticMountCompat] Night vision from '{device.name}' applied to the main camera.");
+                }
+            }
+            catch (System.Exception ex)
+            {
+                PiPDisablerPlugin.LogSource.LogError($"[MagicOpticMountCompat] Applying device effect failed: {ex.Message}");
+                Restore();
+            }
+        }
+
+        /// <summary>Called on scope exit, bypass, mode switch and mod shutdown.</summary>
+        public static void Restore()
+        {
+            try
+            {
+                if (_appliedThermal != null)
+                {
+                    var tv = _appliedThermal;
+                    var s = _savedThermal;
+                    tv.IsNoisy = s.IsNoisy; tv.IsFpsStuck = s.IsFpsStuck; tv.IsMotionBlurred = s.IsMotionBlurred;
+                    tv.IsGlitch = s.IsGlitch; tv.IsPixelated = s.IsPixelated;
+                    tv.ThermalVisionUtilities = s.Utilities; tv.StuckFpsUtilities = s.StuckFps;
+                    tv.MotionBlurUtilities = s.MotionBlur; tv.GlitchUtilities = s.Glitch; tv.PixelationUtilities = s.Pixelation;
+                    tv.ChromaticAberrationThermalShift = s.ChromaticShift; tv.UnsharpBias = s.UnsharpBias; tv.UnsharpRadiusBlur = s.UnsharpRadius;
+                    // Only undo On/enabled if nobody (e.g. thermal goggles) switched them meanwhile.
+                    if (tv.On)
+                    {
+                        tv.On = s.On;
+                        tv.enabled = s.Enabled;
+                    }
+                }
+
+                if (_appliedNight != null)
+                {
+                    var nv = _appliedNight;
+                    var s = _savedNight;
+                    nv.Intensity = s.Intensity; nv.NoiseIntensity = s.NoiseIntensity;
+                    nv.NoiseScale = s.NoiseScale; nv.Color = s.Color;
+                    if (nv.On)
+                    {
+                        nv.On = s.On;
+                        nv.enabled = s.Enabled;
+                    }
+                    nv.ApplySettings();
+                }
+            }
+            catch (System.Exception ex)
+            {
+                PiPDisablerPlugin.LogSource.LogError($"[MagicOpticMountCompat] Restoring camera effects failed: {ex.Message}");
+            }
+            finally
+            {
+                _appliedThermal = null;
+                _appliedNight = null;
+            }
         }
 
         private static bool IsSpecialOptic(OpticSight os)

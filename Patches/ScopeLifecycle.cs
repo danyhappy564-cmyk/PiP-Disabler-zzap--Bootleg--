@@ -211,6 +211,7 @@ namespace PiPDisabler
                     ApplyFov(true);
                 }
                 CameraSettingsManager.ApplyForOptic(os);
+                Patches.MagicOpticMountCompat.OnScopeEnter(os);
             }
 
             CheckAndUpdate("OnOpticEnabled");
@@ -469,6 +470,7 @@ namespace PiPDisabler
 
         public static void ForceExit()
         {
+            Patches.MagicOpticMountCompat.Restore();
             _meshSurgerySuppressedByReload = false;
             _reticleSuppressedByReload = false;
             FreelookTracker.Reset();
@@ -968,6 +970,7 @@ namespace PiPDisabler
             _postExitRestoreFov = 0f;
             _postExitRestoreExpiry = 0f;
 
+            Patches.MagicOpticMountCompat.Restore();
             Patches.WeaponScalingPatch.RestoreScale();
             ReticleRenderer.Cleanup();
             ScopeEffectsRenderer.Cleanup();
@@ -1078,6 +1081,8 @@ namespace PiPDisabler
             FovController.OnModeSwitch();
             ApplyFov(true);
 
+            // 9. MagicOpticMount device in front of this optic → its effect on the main camera.
+            Patches.MagicOpticMountCompat.OnScopeEnter(os);
         }
 
         private static void DoScopeExit()
@@ -1099,6 +1104,7 @@ namespace PiPDisabler
             _isScoped = false;
             _activeOptic = null;
             PerScopeMeshSurgerySettings.ClearActiveScope();
+            Patches.MagicOpticMountCompat.Restore();
 
             // If this scope was bypassed, skip mod cleanup paths.
             if (_modBypassedForCurrentScope)
