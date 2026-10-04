@@ -20,26 +20,77 @@ namespace PiPDisabler.Patches
         {
             return AccessTools.Method(typeof(Player), nameof(Player.SetCompensationScale));
         }
+        // Upstream 2.0 (2026-10-04): follow every FOV step (the SetFov coroutine runs after
+        // Update), so the weapon scale no longer lags the zoom animation by a frame.
+        private static CameraManager _fovEventSource;
+
         public static void CaptureBaseState()
         {
+            UnsubscribeFovChanged();
             var os = ScopeLifecycle.ActiveOptic;
             if (os == null) { _isActive = false; return; }
             _isActive = true;
+            SubscribeFovChanged();
         }
+
+        private static void SubscribeFovChanged()
+        {
+            try
+            {
+                if (!CameraManager.Exist || CameraManager.Instance == null) return;
+                _fovEventSource = CameraManager.Instance;
+                _fovEventSource.OnFovChanged += OnFovChanged;
+            }
+            catch { _fovEventSource = null; }
+        }
+
+        private static void UnsubscribeFovChanged()
+        {
+            if (_fovEventSource == null) return;
+            try { _fovEventSource.OnFovChanged -= OnFovChanged; }
+            catch { }
+            _fovEventSource = null;
+        }
+
+        private static void OnFovChanged(float currentFov)
+        {
+            if (_isActive) UpdateScale();
+        }
+
         public static void UpdateScale()
         {
             if (!_isActive) return;
             var player = GetMainPlayer();
             if (player == null) return;
+            if (!TryGetScale(out float scale)) return;
 
-            float scale = GetManualScale();
             player.RibcageScaleCurrentTarget = scale;
             player.RibcageScaleCurrent = scale;
             LogScale(scale);
         }
 
+        /// <summary>
+        /// Upstream 2.0 FOV Fix Behaviour handling: at the game's own FOV (the 1x view) the vanilla
+        /// scale is left alone; between 35° and that FOV the weapon blends from 1.0 down to 0.65.
+        /// </summary>
+        private static bool TryGetScale(out float scale)
+        {
+            scale = GetManualScale();
+            if (!Settings.FOVFixBehaviour.Value || !CameraManager.Exist || CameraManager.Instance == null)
+                return true;
+
+            float fov = CameraManager.Instance.Fov;
+            if (Mathf.Abs(fov - GetVanillaSettingsFov()) < 0.01f)
+                return false;
+
+            if (fov > 35f)
+                scale = Mathf.Lerp(1f, 0.65f, Mathf.InverseLerp(35f, 75f, fov));
+            return true;
+        }
+
         public static void RestoreScale()
         {
+            UnsubscribeFovChanged();
             _isActive = false;
             RestoreVanillaScale();
         }
@@ -159,8 +210,8 @@ namespace PiPDisabler.Patches
             if (!ScopeLifecycle.IsScoped) return;
             if (ScopeLifecycle.IsModBypassedForCurrentScope) return;
             if (!_isActive) return;
+            if (!TryGetScale(out float scale)) return;
 
-            float scale = GetManualScale();
             __instance.RibcageScaleCurrentTarget = scale;
             __instance.RibcageScaleCurrent = scale;
             LogScale(scale);

@@ -1191,8 +1191,16 @@ namespace PiPDisabler
                 else if (isTransition && !smoothScopeFov && zoomedFov >= zoomBaseFov)
                 {
                     // High-to-low mode switch where new mode has no zoom:
-                    // restore to baseline with configured duration so both directions are consistent
+                    // restore to baseline with configured duration so both directions are consistent.
+                    // With FOV Fix Behaviour the 1x mode goes back to the game's FOV (upstream 2.0).
                     float duration = Settings.FovAnimationDuration.Value;
+                    float targetFov = zoomBaseFov;
+                    if (Settings.FOVFixBehaviour.Value)
+                    {
+                        var pwaForFov = GetLocalPlayer()?.ProceduralWeaponAnimation;
+                        if (pwaForFov != null) targetFov = pwaForFov.GetBaseFov();
+                    }
+                    zoomBaseFov = targetFov;
                     FovController.TrackAppliedFov(zoomBaseFov);
                     CameraManager.Instance.SetFov(zoomBaseFov, duration, false);
                     FreelookTracker.CacheAppliedFov(zoomBaseFov);

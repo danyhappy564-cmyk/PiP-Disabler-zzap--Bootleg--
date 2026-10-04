@@ -27,12 +27,9 @@ namespace PiPDisabler
         {
             get
             {
-                if (!Settings.FOVFixBehaviour.Value)
-                    return Settings.BaselineFOV.Value;
-
-                var player = Helpers.GetLocalPlayer();
-                var pwa = player?.ProceduralWeaponAnimation;
-                return pwa != null ? pwa.GetBaseFov() : Settings.BaselineFOV.Value;
+                // Upstream 2.0 (2026-10-04): the magnification baseline stays fixed even with
+                // FOV Fix Behaviour on; that option only changes the 1x target (GetOneXTargetFov).
+                return Settings.BaselineFOV.Value;
             }
         }
 
