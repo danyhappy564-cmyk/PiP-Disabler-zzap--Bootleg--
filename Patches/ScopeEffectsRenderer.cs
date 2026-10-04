@@ -104,7 +104,10 @@ namespace PiPDisabler
         private static CommandBuffer _preCmdBuffer;   // grabs the frame right before COTI (lens-only mode)
         private static Material      _restoreMat;     // own instance: _outsideBlurMat state is shared with the blur
         private static bool          _restoreMatFailed;
-        private static readonly int  PreOverlayGrabId = Shader.PropertyToID("_PiPDisablerPreOverlayGrab");
+        // Persistent target, not a CommandBuffer temporary: a temp RT taken in the pre buffer was not
+        // visible to the post buffer in game (outside the lens came out flat grey = unbound texture).
+        private static RenderTexture _grabRT;
+        private static bool          _loggedLensOnlyEngaged;
         private const int RestoreBackgroundPass = 2;  // CompositeBackground (stencil 0)
         private const int RestoreScopeBodyPass = 3;   // CompositeScopeBody (stencil 2)
         private static Camera        _postAttachedCamera;
@@ -543,9 +546,8 @@ namespace PiPDisabler
                 // heat stays only inside the lens. The scope shadow is already in the copy.
                 int w = Mathf.Max(1, Mathf.RoundToInt(display.width));
                 int h = Mathf.Max(1, Mathf.RoundToInt(display.height));
-                var format = cam.allowHDR ? RenderTextureFormat.DefaultHDR : RenderTextureFormat.Default;
-                _preCmdBuffer.GetTemporaryRT(PreOverlayGrabId, w, h, 0, FilterMode.Point, format);
-                _preCmdBuffer.Blit(BuiltinRenderTextureType.CameraTarget, PreOverlayGrabId);
+                EnsureGrabTexture(w, h, cam.allowHDR, cam);
+                _preCmdBuffer.Blit(BuiltinRenderTextureType.CameraTarget, _grabRT);
 
                 _postCmdBuffer.SetRenderTarget(BuiltinRenderTextureType.CameraTarget);
                 _postCmdBuffer.SetViewport(display);
@@ -553,7 +555,8 @@ namespace PiPDisabler
                 if (lensStencil)
                 {
                     _restoreMat.SetFloat(BlurFlipYId, Settings.CotiLensOnlyFlipY.Value ? 1f : 0f);
-                    _postCmdBuffer.SetGlobalTexture(BlurTextureId, PreOverlayGrabId);
+                    _restoreMat.SetTexture(BlurTextureId, _grabRT);
+                    _postCmdBuffer.SetGlobalTexture(BlurTextureId, _grabRT);
                     _postCmdBuffer.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
                     var fullScreen = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(2f, 2f, 1f));
                     _postCmdBuffer.DrawMesh(stencilMesh, fullScreen, _restoreMat, 0, RestoreBackgroundPass);
@@ -561,7 +564,6 @@ namespace PiPDisabler
                     // Restore passes don't write stencil, so the lens mask is still valid here.
                     AppendPostOverlayVignette();
                 }
-                _postCmdBuffer.ReleaseTemporaryRT(PreOverlayGrabId);
                 _postCmdBuffer.SetViewProjectionMatrices(cam.worldToCameraMatrix, cam.projectionMatrix);
                 return;
             }
@@ -597,6 +599,40 @@ namespace PiPDisabler
                 return;
             _postCmdBuffer.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
             _postCmdBuffer.DrawMesh(_vigMesh, _vigMatrix, _vigMat, 0, -1);
+        }
+
+        private static void EnsureGrabTexture(int w, int h, bool hdr, Camera cam)
+        {
+            var format = hdr ? RenderTextureFormat.DefaultHDR : RenderTextureFormat.Default;
+            if (_grabRT != null && _grabRT.width == w && _grabRT.height == h && _grabRT.format == format)
+                return;
+
+            ReleaseGrabTexture();
+            _grabRT = new RenderTexture(w, h, 0, format)
+            {
+                name = "PiPDisablerPreOverlayGrab",
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            _grabRT.Create();
+
+            if (!_loggedLensOnlyEngaged)
+            {
+                _loggedLensOnlyEngaged = true;
+                var tt = cam != null ? cam.targetTexture : null;
+                PiPDisablerPlugin.LogSource.LogInfo(
+                    $"[ScopeEffects] COTI lens-only engaged: grab {w}x{h} {format}, camera '{(cam != null ? cam.name : "null")}' " +
+                    $"pixel {(cam != null ? cam.pixelWidth : 0)}x{(cam != null ? cam.pixelHeight : 0)} " +
+                    $"targetTexture={(tt != null ? $"{tt.name} {tt.width}x{tt.height}" : "none")}");
+            }
+        }
+
+        private static void ReleaseGrabTexture()
+        {
+            if (_grabRT == null) return;
+            _grabRT.Release();
+            Object.Destroy(_grabRT);
+            _grabRT = null;
         }
 
         /// <summary>COTI present, lens-only option on, and the restore shader is available.</summary>
@@ -754,6 +790,7 @@ namespace PiPDisabler
 
             _postAttachedCamera = null;
             _lateOverlayPresent = false;
+            ReleaseGrabTexture();
         }
 
         // ─────────────────────────────────────────────────────────────────────
