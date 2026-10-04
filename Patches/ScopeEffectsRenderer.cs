@@ -510,8 +510,9 @@ namespace PiPDisabler
             if (!(_lateOverlayPresent && !IsLensOnlyRestoreActive()) && _shadowActive && useStencil && _shadowMat != null && _shadowMesh != null)
                 _cmdBuffer.DrawMesh(_shadowMesh, _shadowMatrix, _shadowMat, 0, -1);
 
-            // Draw vignette only in lens mask area
-            if (_vigActive && _vigHasLensBounds && useStencil && _vigMat != null && _vigMesh != null)
+            // Draw vignette only in lens mask area.
+            // With a late overlay present it is drawn after that overlay so the heat is vignetted too.
+            if (!_lateOverlayPresent && _vigActive && _vigHasLensBounds && useStencil && _vigMat != null && _vigMesh != null)
                 _cmdBuffer.DrawMesh(_vigMesh, _vigMatrix, _vigMat, 0, -1);
 
             // Restore original matrices
@@ -557,13 +558,17 @@ namespace PiPDisabler
                     var fullScreen = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(2f, 2f, 1f));
                     _postCmdBuffer.DrawMesh(stencilMesh, fullScreen, _restoreMat, 0, RestoreBackgroundPass);
                     _postCmdBuffer.DrawMesh(stencilMesh, fullScreen, _restoreMat, 0, RestoreScopeBodyPass);
+                    // Restore passes don't write stencil, so the lens mask is still valid here.
+                    AppendPostOverlayVignette();
                 }
                 _postCmdBuffer.ReleaseTemporaryRT(PreOverlayGrabId);
                 _postCmdBuffer.SetViewProjectionMatrices(cam.worldToCameraMatrix, cam.projectionMatrix);
                 return;
             }
 
-            if (!_shadowActive || _shadowMat == null || _shadowMesh == null)
+            bool drawShadow = _shadowActive && _shadowMat != null && _shadowMesh != null;
+            bool drawVignette = _vigActive && _vigHasLensBounds && _vigMat != null && _vigMesh != null;
+            if (!drawShadow && !drawVignette)
                 return;
 
             _postCmdBuffer.SetRenderTarget(BuiltinRenderTextureType.CameraTarget);
@@ -574,10 +579,24 @@ namespace PiPDisabler
             if (useStencil)
             {
                 _postCmdBuffer.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
-                _postCmdBuffer.DrawMesh(_shadowMesh, _shadowMatrix, _shadowMat, 0, -1);
+                if (drawShadow)
+                    _postCmdBuffer.DrawMesh(_shadowMesh, _shadowMatrix, _shadowMat, 0, -1);
+                AppendPostOverlayVignette();
             }
 
             _postCmdBuffer.SetViewProjectionMatrices(cam.worldToCameraMatrix, cam.projectionMatrix);
+        }
+
+        /// <summary>
+        /// Vignette inside the lens (stencil 1), drawn after the late overlay so its heat gets the
+        /// same edge darkening as the scene. Expects clip-space matrices and a valid lens stencil.
+        /// </summary>
+        private static void AppendPostOverlayVignette()
+        {
+            if (!_vigActive || !_vigHasLensBounds || _vigMat == null || _vigMesh == null)
+                return;
+            _postCmdBuffer.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
+            _postCmdBuffer.DrawMesh(_vigMesh, _vigMatrix, _vigMat, 0, -1);
         }
 
         /// <summary>COTI present, lens-only option on, and the restore shader is available.</summary>
