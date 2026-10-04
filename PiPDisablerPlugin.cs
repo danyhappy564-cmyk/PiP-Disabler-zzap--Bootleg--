@@ -12,10 +12,11 @@ namespace PiPDisabler
     [BepInPlugin("com.fiodor.pipdisabler", "PiP-Disabler", PluginVersion)]
     [BepInDependency("com.fontaine.fovfix", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("com.Shibatsu.DynamicExternalResolution", BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency("com.lennoxp90.coti", BepInDependency.DependencyFlags.SoftDependency)]
 
     public sealed class PiPDisablerPlugin : BaseUnityPlugin
     {
-        public const string PluginVersion = "2.0.9";
+        public const string PluginVersion = "2.1.0";
 
         public static ManualLogSource LogSource;
         internal static PiPDisablerPlugin Instance;
