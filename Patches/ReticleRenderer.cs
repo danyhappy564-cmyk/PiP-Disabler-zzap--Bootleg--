@@ -202,6 +202,8 @@ namespace PiPDisabler
             try
             {
                 _opticTransform = os.transform;
+                _scopeDataTransform = os.ScopeData != null ? os.ScopeData.transform : null;
+                _zeroLocalValid = false;
 
                 EnsureMeshAndMaterial();
 
@@ -619,6 +621,15 @@ namespace PiPDisabler
         // instead (KeepScopeCenteredWithZeroing). Used to place the reticle at the zeroed point.
         private static bool _zeroOffsetActive;
         private static Vector3 _zeroedForward;
+        // The zero direction is read from the optic's ScopeData (the optic camera's pivot), which
+        // moves with the weapon in the same hierarchy as the scope bone. The optic camera itself is
+        // a LateUpdate copy that can trail the weapon by a frame; using it made the reticle jitter
+        // vertically with sway (seen in a user recording). The bone-local direction is also smoothed,
+        // since it should only change when the zero changes.
+        private static Transform _scopeDataTransform;
+        private static Vector3 _zeroLocal;
+        private static bool _zeroLocalValid;
+        private const float ZeroSmoothingRate = 8f;
         private const float MaxZeroCorrectionDeg = 5f;
 
         /// <summary>
@@ -645,11 +656,24 @@ namespace PiPDisabler
                 if (axis.sqrMagnitude < 1e-6f) return opticRot;
 
                 Vector3 opticForward = opticRot * Vector3.forward;
-                float angle = Vector3.Angle(opticForward, axis);
-                if (angle < 0.001f || angle > MaxZeroCorrectionDeg)
+                Vector3 zeroDir = _scopeDataTransform != null ? _scopeDataTransform.forward : opticForward;
+                float angle = Vector3.Angle(zeroDir, axis);
+                if (angle > MaxZeroCorrectionDeg)
                     return opticRot;
 
-                _zeroedForward = opticForward;
+                Vector3 local = bone.InverseTransformDirection(zeroDir);
+                if (!_zeroLocalValid)
+                {
+                    _zeroLocal = local;
+                    _zeroLocalValid = true;
+                }
+                else
+                {
+                    float k = 1f - Mathf.Exp(-ZeroSmoothingRate * Time.unscaledDeltaTime);
+                    _zeroLocal = Vector3.Slerp(_zeroLocal, local, k);
+                }
+
+                _zeroedForward = bone.TransformDirection(_zeroLocal).normalized;
                 _zeroOffsetActive = true;
                 return Quaternion.FromToRotation(opticForward, axis) * opticRot;
             }

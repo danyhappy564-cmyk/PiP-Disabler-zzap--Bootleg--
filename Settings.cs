@@ -21,6 +21,8 @@ namespace PiPDisabler
         public static ConfigEntry<string> ScopeWhitelistNames;
         public static ConfigEntry<KeyCode> ScopeWhitelistToggleEntryKey;
         public static ConfigEntry<float> ScopeAlignmentAngleTolerance;
+        public static ConfigEntry<float> HighMagCompressionStart;
+        public static ConfigEntry<float> HighMagCompressionCurve;
         public static ConfigEntry<bool> KeepScopeCenteredWithZeroing;
         public static ConfigEntry<float> PostSprintAimGateDuration;
         public static ConfigEntry<bool> BypassDuringStanceTransitions;
@@ -219,6 +221,16 @@ namespace PiPDisabler
                     "Be aware that 1x is always forced to 35° for stepped optics.",
                     new AcceptableValueRange<float>(20f, 35f),
                     new ConfigurationManagerAttributes { IsAdvanced = true })));
+            ConfigEntries.Add(HighMagCompressionStart = config.Bind("General", "High Magnification Compression Start", 6f,
+                new ConfigDescription(
+                    "Magnifications above this are toned down so high-power scopes don't zoom the whole screen in so far. Set to 30 to turn it off.",
+                    new AcceptableValueRange<float>(2f, 30f),
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
+            ConfigEntries.Add(HighMagCompressionCurve = config.Bind("General", "High Magnification Compression Curve", 0.5f,
+                new ConfigDescription(
+                    "How strongly magnification above the start value is toned down. 1 = not at all, 0.5 = square root (25x on a start of 6 becomes ~12x), lower = flatter.",
+                    new AcceptableValueRange<float>(0.2f, 1f),
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(FovAnimationDuration = config.Bind("General", "FOV Animation Duration", 1f,
                 new ConfigDescription(
                     "Duration of the FOV transitions during magnification changes.",
