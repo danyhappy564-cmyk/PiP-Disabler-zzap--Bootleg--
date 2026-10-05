@@ -426,6 +426,8 @@ namespace PiPDisabler
                 }
             }
 
+            TickAutoCutZoom();
+
             if (_activeOptic != null)
             {
                 float mag = FovController.GetVisualMagnification();
@@ -541,6 +543,46 @@ namespace PiPDisabler
             catch (Exception ex)
             {
                 PiPDisablerPlugin.DebugLogInfo($"[ScopeLifecycle] Re-cut failed: {ex.Message}");
+            }
+        }
+
+        // ── Automatic hole follows the zoom (re-cut once the zoom has settled) ──
+        private const float AutoCutSettleTime = 0.35f;
+        private static int _autoCutBucketSeen = int.MinValue;
+        private static float _autoCutBucketSince;
+        private static int _autoCutBucketApplied = int.MinValue;
+
+        private static void TickAutoCutZoom()
+        {
+            var os = _activeOptic;
+            if (os == null || _meshSurgerySuppressedByReload || !PerScopeMeshSurgerySettings.IsAutoCut())
+                return;
+
+            int bucket = MeshSurgeryManager.GetAutoZoomBucket();
+            float now = Time.realtimeSinceStartup;
+            if (bucket != _autoCutBucketSeen)
+            {
+                _autoCutBucketSeen = bucket;
+                _autoCutBucketSince = now;
+                return;
+            }
+            if (bucket == _autoCutBucketApplied || now - _autoCutBucketSince < AutoCutSettleTime)
+                return;
+            if (SettingsApplyGate.IsSettingsWindowOpen)
+                return;
+
+            _autoCutBucketApplied = bucket;
+            try
+            {
+                // Same signature → ApplyForOptic only re-attaches the cached cut meshes (no new meshes).
+                MeshSurgeryManager.RestoreForScope(os.transform);
+                MeshSurgeryManager.ApplyForOptic(os);
+                LensTransparency.HideAllLensSurfaces(os);
+                PiPDisablerPlugin.DebugLogInfo($"[ScopeLifecycle] Auto hole re-fitted for zoom bucket {bucket}.");
+            }
+            catch (Exception ex)
+            {
+                PiPDisablerPlugin.DebugLogInfo($"[ScopeLifecycle] Auto hole re-fit failed: {ex.Message}");
             }
         }
 

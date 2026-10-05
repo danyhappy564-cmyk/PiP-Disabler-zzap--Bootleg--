@@ -43,6 +43,9 @@ namespace PiPDisabler
         /// <summary>Records the most-recently applied FOV target.</summary>
         public static void TrackAppliedFov(float fov) => _lastAppliedFov = fov;
 
+        /// <summary>Last zoom FOV target applied while scoped (0 = none yet).</summary>
+        public static float LastAppliedFov => _lastAppliedFov;
+
         // Dedup logging
         private static float _lastLoggedMag;
         private static string _lastLoggedSource;

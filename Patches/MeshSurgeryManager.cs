@@ -340,7 +340,7 @@ namespace PiPDisabler
                     const float Margin = 1.15f;
                     const float BaseFlare = 0.04f; // radius growth per metre in front of the lens (×"넓이")
                     float r = lensR * Margin + 0.001f;
-                    float flare = BaseFlare * PerScopeMeshSurgerySettings.GetCutWidthMultiplierRaw();
+                    float flare = BaseFlare * PerScopeMeshSurgerySettings.GetCutWidthMultiplierRaw() * GetAutoZoomFactorQuantized();
                     autoStart = PerScopeMeshSurgerySettings.GetCutStartOffset();
                     autoLen = Mathf.Max(PerScopeMeshSurgerySettings.GetCutLength(), autoStart + 0.05f);
                     autoPreserve = PerScopeMeshSurgerySettings.GetNearPreserveDepth();
@@ -784,11 +784,32 @@ namespace PiPDisabler
             return false;
         }
 
+        // At low magnification more of the scope's inside shows around the lens rim (the weapon is
+        // drawn larger, so the visible cone through the lens is wider); at high magnification it is
+        // almost a straight tube. The automatic hole's flare grows as the zoom drops: ×1 from 4x up,
+        // ×4 at 1x, in 25% buckets so a re-cut only happens when the bucket changes (after the
+        // zoom settles — see ScopeLifecycle.TickAutoCutZoom).
+        private const float AutoZoomBucketStep = 1.25f;
+
+        internal static int GetAutoZoomBucket()
+        {
+            float fov = FovController.LastAppliedFov;
+            if (fov <= 0.1f) fov = FovController.ComputeZoomedFov();
+            float baseFov = FovController.MagnificationBaselineFov;
+            float mag = fov > 0.1f
+                ? Mathf.Tan(baseFov * Mathf.Deg2Rad * 0.5f) / Mathf.Tan(fov * Mathf.Deg2Rad * 0.5f)
+                : 1f;
+            float factor = Mathf.Clamp(4f / Mathf.Max(mag, 0.1f), 1f, 4f);
+            return Mathf.RoundToInt(Mathf.Log(factor) / Mathf.Log(AutoZoomBucketStep));
+        }
+
+        private static float GetAutoZoomFactorQuantized() => Mathf.Pow(AutoZoomBucketStep, GetAutoZoomBucket());
+
         private static string BuildCutSettingsSignature()
         {
             return string.Join("|", new[]
             {
-                PerScopeMeshSurgerySettings.IsAutoCut() ? "Auto" : "Cylinder",
+                PerScopeMeshSurgerySettings.IsAutoCut() ? "Auto" + GetAutoZoomBucket() : "Cylinder",
                 PerScopeMeshSurgerySettings.GetCutWidthMultiplierRaw().ToString("F3"),
                 PerScopeMeshSurgerySettings.GetPlaneOffsetMeters().ToString("F4"),
                 PerScopeMeshSurgerySettings.GetPlane1OffsetMeters().ToString("F4"),
