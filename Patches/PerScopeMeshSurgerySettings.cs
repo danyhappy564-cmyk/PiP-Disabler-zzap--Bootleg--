@@ -134,8 +134,10 @@ namespace PiPDisabler
                     // whatever the previous scope left behind, so saving starts from the real state.
                     entry = new ScopeMeshSurgerySettingsEntry { ScopeKey = _activeScopeKey };
                     CopyGlobalSettingsTo(entry);
-                    entry.WeaponScaleMinMagnification = Settings.ManualWeaponScale.Value;
-                    entry.WeaponScaleMaxMagnification = Settings.ManualWeaponScale.Value;
+                    // Same size as now: once saved, the global multipliers no longer stack on this scope.
+                    entry.WeaponScaleMinMagnification = Settings.ManualWeaponScale.Value * Settings.GlobalScopeScalingMultiplier.Value;
+                    entry.WeaponScaleMaxMagnification = entry.WeaponScaleMinMagnification;
+                    entry.ReticleSizeMultiplier = Settings.GlobalReticleScalingMultiplier.Value;
                     entry.VignetteOpacity = 0f;
                     entry.VignetteRadius = 0f;
                     entry.VignetteSoftness = 0f;
@@ -228,6 +230,13 @@ namespace PiPDisabler
                 _file.Entries.Add(target);
             }
 
+            CopyCustomTo(target);
+            WriteToDisk();
+            return true;
+        }
+
+        private static void CopyCustomTo(ScopeMeshSurgerySettingsEntry target)
+        {
             target.PlaneOffsetMeters = Settings.CustomPlaneOffsetMeters.Value;
             target.Plane1Radius = Settings.CustomPlane1Radius.Value;
             target.Plane1OffsetMeters = Settings.CustomPlane1OffsetMeters.Value;
@@ -252,9 +261,39 @@ namespace PiPDisabler
             target.VignetteRadius = Settings.CustomVignetteRadius.Value;
             target.VignetteSoftness = Settings.CustomVignetteSoftness.Value;
             target.ExpandSearchToWeaponRoot = Settings.CustomExpandSearchToWeaponRoot.Value;
-            WriteToDisk();
+        }
+
+        internal static bool IsSyncing => _syncingCustomConfig;
+
+        private const float WriteDelay = 0.5f;
+        private static float _writeDueAt = -1f;
+
+        /// <summary>
+        /// A per-scope slider moved while aiming: put the values into the active scope's entry
+        /// right away (the getters read it every frame) and save to disk shortly after.
+        /// </summary>
+        internal static bool ApplyLiveEditFromCustom()
+        {
+            if (_syncingCustomConfig || string.IsNullOrWhiteSpace(_activeScopeKey))
+                return false;
+
+            EnsureLoaded();
+            CopyCustomTo(GetOrCreateEntry(_activeScopeKey));
+            _writeDueAt = Time.realtimeSinceStartup + WriteDelay;
             return true;
         }
+
+        internal static void TickPendingWrite()
+        {
+            if (_writeDueAt < 0f || Time.realtimeSinceStartup < _writeDueAt) return;
+            _writeDueAt = -1f;
+            WriteToDisk();
+            PiPDisablerPlugin.DebugLogInfo($"[CustomMeshSettings] Auto-saved per-scope settings ('{_activeScopeKey ?? "?"}').");
+        }
+
+        /// <summary>The global multipliers only apply to scopes without their own saved settings.</summary>
+        internal static float GetGlobalReticleMultiplier()
+            => ActiveScopeOverride != null ? 1f : Settings.GlobalReticleScalingMultiplier.Value;
 
         internal static void SaveActiveScopeVisualSettings()
         {

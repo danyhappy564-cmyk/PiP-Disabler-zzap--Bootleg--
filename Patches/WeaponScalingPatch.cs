@@ -123,8 +123,7 @@ namespace PiPDisabler.Patches
         if (!PerScopeMeshSurgerySettings.TryGetWeaponScale(out float minScale, out float maxScale))
             return Settings.ManualWeaponScale.Value * Settings.GlobalScopeScalingMultiplier.Value;
 
-        minScale *= Settings.GlobalScopeScalingMultiplier.Value;
-        maxScale *= Settings.GlobalScopeScalingMultiplier.Value;
+        // This scope has its own weapon scale: the global multiplier does not stack on top.
 
         if (TryGetSingleModeScale(minScale, out float singleModeScale))
             return singleModeScale;

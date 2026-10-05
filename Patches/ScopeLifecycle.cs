@@ -520,6 +520,37 @@ namespace PiPDisabler
             SyncState();
         }
 
+        // ── Live re-cut while a per-scope cut slider moves ──────────────────
+        private const float RecutInterval = 0.15f;
+        private static float _nextRecutAt;
+        private static bool _recutPending;
+
+        public static void RequestRecut()
+        {
+            _recutPending = true;
+        }
+
+        public static void TickPendingRecut()
+        {
+            if (!_recutPending || Time.realtimeSinceStartup < _nextRecutAt) return;
+            _recutPending = false;
+            _nextRecutAt = Time.realtimeSinceStartup + RecutInterval;
+
+            var os = _activeOptic;
+            if (!_isScoped || _modBypassedForCurrentScope || os == null || _meshSurgerySuppressedByReload) return;
+
+            try
+            {
+                MeshSurgeryManager.RestoreForScope(os.transform);
+                MeshSurgeryManager.ApplyForOptic(os);
+                LensTransparency.HideAllLensSurfaces(os);
+            }
+            catch (Exception ex)
+            {
+                PiPDisablerPlugin.DebugLogInfo($"[ScopeLifecycle] Live re-cut failed: {ex.Message}");
+            }
+        }
+
         /// <summary>One-glance state for the F12 panel (Korean).</summary>
         public static string GetStatusText()
         {
@@ -537,7 +568,7 @@ namespace PiPDisabler
             string custom = PerScopeMeshSurgerySettings.GetActiveOverride() != null
                 ? "있음 (저장된 값 사용 중)"
                 : "없음 (기본값 사용 중)";
-            return $"스코프: {key}\n상태: {mode}\n전용 설정: {custom}";
+            return $"스코프: {key}\n상태: {mode}\n전용 설정: {custom}\n(아래 '3. 스코프별 설정' 값을 바꾸면 바로 보이고 이 스코프에 자동 저장됩니다)";
         }
 
         public static void ToggleActiveScopeWhitelistEntry()

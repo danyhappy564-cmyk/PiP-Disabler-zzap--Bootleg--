@@ -17,7 +17,7 @@ namespace PiPDisabler
 
     public sealed class PiPDisablerPlugin : BaseUnityPlugin
     {
-        public const string PluginVersion = "2.3.0";
+        public const string PluginVersion = "2.4.0";
 
         public static ManualLogSource LogSource;
         internal static PiPDisablerPlugin Instance;
@@ -169,6 +169,8 @@ namespace PiPDisabler
             }
 
             ScopeLifecycle.TickPendingReapply();
+            ScopeLifecycle.TickPendingRecut();
+            PerScopeMeshSurgerySettings.TickPendingWrite();
 
             if (!ScopeLifecycle.ShouldRunUpdateLoop())
                 return;

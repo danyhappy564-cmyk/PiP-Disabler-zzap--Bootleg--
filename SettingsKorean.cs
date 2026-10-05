@@ -13,7 +13,7 @@ namespace PiPDisabler
         // When a change shows up, appended to every description.
         private const string Live = "\n[적용: 바로]";
         private const string Reaim = "\n[적용: 조준 중이면 바로 다시 적용]";
-        private const string Saved = "\n[적용: 조준한 채로 '이 스코프 설정 저장' 키를 누르면 바로]";
+        private const string PerScope = "\n[바로 보임 · 지금 조준 중인 스코프에 자동 저장 — 조준한 채로 바꾸세요]";
         private const string Rarely = "\n※ 보통 건드릴 필요 없음.";
 
         private const string CatBasic = "1. 기본";
@@ -48,10 +48,10 @@ namespace PiPDisabler
                 "조준 중에 누르면 지금 스코프를 허용 목록에 넣거나 뺌." + Live),
             [K("General", "FOV Fix Behaviour")] = new Text(CatBasic, "1배율 시야각 = 게임 설정 시야각",
                 "켜면 1배율 스코프의 시야각을 게임 설정의 FOV로 맞춤." + Reaim),
-            [K("General", "Global Scope Scaling Multiplier")] = new Text(CatBasic, "스코프 크기 (전체)",
-                "모든 스코프가 화면에서 보이는 크기. 크게 = 값 올림." + Reaim),
-            [K("General", "Global Reticle Scaling Multiplier")] = new Text(CatBasic, "조준선 크기 (전체)",
-                "모든 조준선 크기. 크게 = 값 올림." + Reaim),
+            [K("General", "Global Scope Scaling Multiplier")] = new Text(CatBasic, "스코프 크기 (전용 설정 없는 스코프)",
+                "전용 설정이 없는 스코프가 화면에서 보이는 크기. 전용 '총 크기'를 저장한 스코프에는 안 겹치고 그 값만 씀." + Live),
+            [K("General", "Global Reticle Scaling Multiplier")] = new Text(CatBasic, "조준선 크기 (전용 설정 없는 스코프)",
+                "전용 설정이 없는 스코프의 조준선 크기. 전용 설정이 있는 스코프에는 안 겹치고 그 값만 씀." + Live),
             [K("General", "Baseline FOV")] = new Text(CatBasic, "배율 계산 기준 시야각",
                 "배율을 시야각으로 바꿀 때 쓰는 기준(예: 35면 2배율 = 17.5°). 작게 = 전체적으로 더 확대." + Reaim + Rarely),
             [K("General", "FOV Animation Duration")] = new Text(CatBasic, "줌 전환 시간(초)",
@@ -86,50 +86,58 @@ namespace PiPDisabler
 
             // ── Per scope settings ──
             [K("Per scope settings", "Current scope")] = new Text(CatPerScope, "지금 조준 중인 스코프",
-                "어떤 스코프인지, 이 모드가 적용 중인지, 전용 설정이 저장돼 있는지 보여줌. 조준한 채로 F12를 열어 확인하세요."),
-            [K("Per scope settings", "Save custom settings key")] = new Text(CatPerScope, "이 스코프 설정 저장 키",
-                "조준한 채로 누르면 아래 값들을 '지금 조준 중인 스코프' 전용으로 저장하고 바로 다시 적용(화면 알림 뜸)."),
-            [K("Per scope settings", "DeleteCustomMeshSurgerySettingsKey")] = new Text(CatPerScope, "이 스코프 설정 삭제 키",
-                "조준한 채로 누르면 지금 스코프의 전용 설정을 지우고 기본값으로 되돌림(화면 알림 뜸)."),
-            [K("Per scope settings", "Reticle Size Multiplier")] = new Text(CatPerScope, "조준선 크기 배수",
-                "이 스코프의 조준선 크기. 1 = 그대로." + Saved),
+                "어떤 스코프인지, 이 모드가 적용 중인지, 전용 설정이 있는지 보여줌. 조준한 채로 F12를 열어 확인하세요."),
+            [K("Per scope settings", "Save custom settings key")] = new Text(CatPerScope, "(자동 저장이라 필요 없음)", ""),
+            [K("Per scope settings", "DeleteCustomMeshSurgerySettingsKey")] = new Text(CatPerScope, "이 스코프 전용 설정 지우기 키",
+                "조준한 채로 누르면 이 스코프의 전용 설정을 지우고 기본값으로 되돌림(화면 알림 뜸)."),
+            [K("Per scope settings", "Weapon Scale Min Magnification")] = new Text(CatPerScope, "총 크기 - 최저 배율",
+                "최저 배율로 볼 때 총 모델 크기. 기본 1. 값을 올리면 총이 작아져서 스코프 몸통이 화면을 덜 가림." + PerScope),
+            [K("Per scope settings", "Weapon Scale Max Magnification")] = new Text(CatPerScope, "총 크기 - 최고 배율",
+                "최고 배율로 볼 때 총 모델 크기. 고배율에서 스코프 몸통이 너무 크게 보이면 올리세요." + PerScope),
+            [K("Per scope settings", "Weapon Scale Multiplier")] = new Text(CatPerScope, "총 크기 - 둘 다 곱하기",
+                "위 두 값에 한꺼번에 곱함. 1 = 그대로." + PerScope),
+            [K("Per scope settings", "Reticle Size Multiplier")] = new Text(CatPerScope, "조준선 크기",
+                "1 = 그대로. 크게 = 올림." + PerScope),
             [K("Per scope settings", "Reticle Size")] = new Text(CatPerScope, "조준선 기본 크기",
-                "배율 따라 안 변하는 조준선의 크기." + Saved + Rarely),
-            [K("Per scope settings", "Variable Reticle Minimum Size")] = new Text(CatPerScope, "조준선 최소 크기(가변)",
-                "최소·최대 둘 다 0이 아닐 때만 사용." + Saved + Rarely),
-            [K("Per scope settings", "Variable Reticle Maximum Size")] = new Text(CatPerScope, "조준선 최대 크기(가변)",
-                "최소·최대 둘 다 0이 아닐 때만 사용." + Saved + Rarely),
-            [K("Per scope settings", "Weapon Scale Multiplier")] = new Text(CatPerScope, "총·스코프 크기 배수",
-                "아래 '총 크기' 두 값에 한꺼번에 곱함. 1 = 그대로." + Saved),
-            [K("Per scope settings", "Weapon Scale Min Magnification")] = new Text(CatPerScope, "총 크기 - 최저 배율일 때",
-                "이 스코프를 최저 배율로 볼 때 총 모델 크기. 기본 1, 값이 클수록 총이 작아짐(스코프 몸통이 화면을 덜 가림)." + Saved),
-            [K("Per scope settings", "Weapon Scale Max Magnification")] = new Text(CatPerScope, "총 크기 - 최고 배율일 때",
-                "최고 배율일 때 총 모델 크기. 고배율에서 스코프 몸통·안쪽 원통이 크게 보이면 이 값을 올려 보세요." + Saved),
-            [K("Per scope settings", "Visual Recoil Compensation")] = new Text(CatPerScope, "반동 화면 보정",
-                "0 = 전체 기본값 사용. 음수면 방향 반대." + Saved + Rarely),
-            [K("Per scope settings", "Vignette Opacity")] = new Text(CatPerScope, "비네팅 진하기 (이 스코프)",
-                "0 = '화면 효과' 기본값 사용. 바꾸면 자동 저장." + Live),
-            [K("Per scope settings", "Vignette Radius")] = new Text(CatPerScope, "비네팅 시작 위치 (이 스코프)",
-                "0 = '화면 효과' 기본값 사용. 바꾸면 자동 저장." + Live),
-            [K("Per scope settings", "Vignette Softness")] = new Text(CatPerScope, "비네팅 부드러움 (이 스코프)",
-                "0 = '화면 효과' 기본값 사용. 바꾸면 자동 저장." + Live),
-            [K("Per scope settings", "CutLength")] = new Text(CatPerScope, "몸통 자르기 - 길이",
-                "렌즈 안쪽에 원통(몸통 내부)이 보이면 늘려 보세요." + Saved),
-            [K("Per scope settings", "CutStartOffset")] = new Text(CatPerScope, "몸통 자르기 - 시작 위치",
-                "눈 쪽으로 얼마나 앞에서부터 자를지." + Saved + Rarely),
-            [K("Per scope settings", "NearPreserveDepth")] = new Text(CatPerScope, "몸통 자르기 - 접안부 남기는 두께",
-                "눈 앞에 남기는 테두리 두께. 0 = 다 자름." + Saved + Rarely),
-            [K("Per scope settings", "Plane1Radius")] = new Text(CatPerScope, "몸통 자르기 - 눈 쪽 반지름",
-                "가까운 쪽 구멍 크기." + Saved + Rarely),
-            [K("Per scope settings", "Plane2Radius")] = new Text(CatPerScope, "몸통 자르기 - 2번째 반지름", "" + Saved + Rarely),
-            [K("Per scope settings", "Plane3Radius")] = new Text(CatPerScope, "몸통 자르기 - 3번째 반지름", "" + Saved + Rarely),
-            [K("Per scope settings", "Plane4Radius")] = new Text(CatPerScope, "몸통 자르기 - 끝 쪽 반지름", "먼 쪽 구멍 크기." + Saved + Rarely),
-            [K("Per scope settings", "Plane2Position")] = new Text(CatPerScope, "몸통 자르기 - 2번째 위치", "" + Saved + Rarely),
-            [K("Per scope settings", "Plane3Position")] = new Text(CatPerScope, "몸통 자르기 - 3번째 위치", "" + Saved + Rarely),
-            [K("Per scope settings", "Plane4Position")] = new Text(CatPerScope, "몸통 자르기 - 끝 위치", "" + Saved + Rarely),
-            [K("Per scope settings", "PlaneOffsetMeters")] = new Text(CatPerScope, "몸통 자르기 - 면 오프셋", "" + Saved + Rarely),
-            [K("Per scope settings", "Plane1OffsetMeters")] = new Text(CatPerScope, "몸통 자르기 - 눈 쪽 오프셋", "" + Saved + Rarely),
-            [K("Per scope settings", "ExpandSearchToWeaponRoot")] = new Text(CatPerScope, "총 전체에서 자를 부품 찾기", "" + Saved + Rarely),
+                "보통은 위 '조준선 크기'로 조절하세요." + PerScope + Rarely),
+            [K("Per scope settings", "Variable Reticle Minimum Size")] = new Text(CatPerScope, "입체 조준선 - 최소 크기",
+                "일부 스코프(입체 조준선)만 해당. 최소·최대 둘 다 0이 아니어야 작동." + PerScope + Rarely),
+            [K("Per scope settings", "Variable Reticle Maximum Size")] = new Text(CatPerScope, "입체 조준선 - 최대 크기",
+                "일부 스코프(입체 조준선)만 해당. 최소·최대 둘 다 0이 아니어야 작동." + PerScope + Rarely),
+            [K("Per scope settings", "Vignette Opacity")] = new Text(CatPerScope, "렌즈 가장자리 어둡기",
+                "0 = '2. 화면 효과'의 값 사용." + PerScope),
+            [K("Per scope settings", "Vignette Radius")] = new Text(CatPerScope, "렌즈 가장자리 어두워지는 위치",
+                "0 = '2. 화면 효과'의 값 사용. 작을수록 가운데부터 어두워짐." + PerScope),
+            [K("Per scope settings", "Vignette Softness")] = new Text(CatPerScope, "렌즈 가장자리 부드러움",
+                "0 = '2. 화면 효과'의 값 사용." + PerScope),
+            [K("Per scope settings", "Visual Recoil Compensation")] = new Text(CatPerScope, "반동 때 화면 흔들림 보정",
+                "0 = 끔. 음수면 반대 방향." + PerScope + Rarely),
+
+            // Mesh cut = a hole drilled through the scope body so the main camera sees through it.
+            [K("Per scope settings", "CutLength")] = new Text(CatPerScope, "구멍 - 깊이",
+                "스코프 몸통을 뚫는 구멍을 앞쪽으로 얼마나 깊게 뚫을지. 렌즈 안에 몸통 안쪽(원통)이 보이면 늘리세요." + PerScope),
+            [K("Per scope settings", "Plane1Radius")] = new Text(CatPerScope, "구멍 - 입구 크기 (눈 쪽)",
+                "구멍은 눈 쪽(입구)에서 앞쪽(끝)까지 원 4개를 이은 깔때기 모양. 이건 입구 원의 크기. 클수록 넓게 잘라냄." + PerScope + Rarely),
+            [K("Per scope settings", "Plane2Position")] = new Text(CatPerScope, "구멍 - 2번 원 위치",
+                "2번 원이 구멍의 어디쯤에 있는지. 0 = 입구, 1 = 끝." + PerScope + Rarely),
+            [K("Per scope settings", "Plane2Radius")] = new Text(CatPerScope, "구멍 - 2번 원 크기",
+                "그 지점의 구멍 크기. 클수록 넓게 잘라냄." + PerScope + Rarely),
+            [K("Per scope settings", "Plane3Position")] = new Text(CatPerScope, "구멍 - 3번 원 위치",
+                "0 = 입구, 1 = 끝." + PerScope + Rarely),
+            [K("Per scope settings", "Plane3Radius")] = new Text(CatPerScope, "구멍 - 3번 원 크기",
+                "클수록 넓게 잘라냄." + PerScope + Rarely),
+            [K("Per scope settings", "Plane4Position")] = new Text(CatPerScope, "구멍 - 끝 원 위치",
+                "보통 1(끝)." + PerScope + Rarely),
+            [K("Per scope settings", "Plane4Radius")] = new Text(CatPerScope, "구멍 - 끝 원 크기",
+                "구멍 맨 앞쪽 크기. 클수록 넓게 잘라냄." + PerScope + Rarely),
+            [K("Per scope settings", "CutStartOffset")] = new Text(CatPerScope, "구멍 - 시작 위치",
+                "렌즈보다 눈 쪽으로 얼마나 앞에서부터 뚫기 시작할지. 클수록 눈 쪽에서 시작." + PerScope + Rarely),
+            [K("Per scope settings", "NearPreserveDepth")] = new Text(CatPerScope, "구멍 - 눈 앞 테두리 남기기",
+                "눈 바로 앞 테두리를 얼마나 두껍게 남길지. 0 = 안 남김." + PerScope + Rarely),
+            [K("Per scope settings", "PlaneOffsetMeters")] = new Text(CatPerScope, "구멍 - 자르는 면 미세 이동", "미세 조정용." + PerScope + Rarely),
+            [K("Per scope settings", "Plane1OffsetMeters")] = new Text(CatPerScope, "구멍 - 입구 미세 이동", "미세 조정용." + PerScope + Rarely),
+            [K("Per scope settings", "ExpandSearchToWeaponRoot")] = new Text(CatPerScope, "구멍 - 총의 다른 부품도 뚫기",
+                "켜면 스코프 말고 마운트 같은 총 부품도 구멍에 걸리면 잘라냄." + PerScope + Rarely),
 
             // ── Hacks ──
             [K("Hacks", "Keep scope centered with zeroing")] = new Text(CatMotion, "영점 바꿔도 스코프 가운데 유지",
@@ -202,7 +210,17 @@ namespace PiPDisabler
             K("Per scope settings", "Weapon Scale Min Magnification"),
             K("Per scope settings", "Weapon Scale Max Magnification"),
             K("Per scope settings", "CutLength"),
+            K("Per scope settings", "Weapon Scale Multiplier"),
             K("General", "Auto Disable For NV/Thermals"),
+        };
+
+        // Hidden so per-scope values have one place to edit: the global cut/scale fallbacks
+        // (still used by scopes without saved settings) and the save key (saving is automatic).
+        private static readonly HashSet<string> Hidden = new HashSet<string>
+        {
+            K("Per scope settings", "Save custom settings key"),
+            K("Hacks", "Manual Weapon Scale"),
+            K("Hacks", "Visual Recoil Compensation"),
         };
 
         private static string K(string section, string key) => section + "\u0001" + key;
@@ -226,8 +244,11 @@ namespace PiPDisabler
                 }
                 if (attributes == null) continue;
 
-                if (Visible.Contains(K(entry.Definition.Section, entry.Definition.Key)))
+                string key = K(entry.Definition.Section, entry.Definition.Key);
+                if (Visible.Contains(key))
                     attributes.IsAdvanced = false;
+                if (Hidden.Contains(key) || entry.Definition.Section == "Global Mesh Surgery settings")
+                    attributes.Browsable = false;
                 attributes.DispName = text.Name;
                 attributes.Category = text.Category;
                 attributes.Description = text.Desc.TrimStart('\n');

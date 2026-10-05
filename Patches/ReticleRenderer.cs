@@ -832,9 +832,9 @@ namespace PiPDisabler
                 if (currentMag < 1f) currentMag = _lastMag;
                 float meshZoomScale = Mathf.Lerp(1f, Mathf.Max(1f, currentMag), zoomPosition);
                 float normalizedScale = Settings.MeshReticleNormalizedScale.Value;
-                float meshScale = _baseScale * meshZoomScale * _meshReticleBoundsScale * normalizedScale * Settings.GlobalReticleScalingMultiplier.Value;
-                float minMeshScale = PerScopeMeshSurgerySettings.GetMeshReticleMinScale() * Settings.GlobalReticleScalingMultiplier.Value;
-                float maxMeshScale = PerScopeMeshSurgerySettings.GetMeshReticleMaxScale() * Settings.GlobalReticleScalingMultiplier.Value;
+                float meshScale = _baseScale * meshZoomScale * _meshReticleBoundsScale * normalizedScale * PerScopeMeshSurgerySettings.GetGlobalReticleMultiplier();
+                float minMeshScale = PerScopeMeshSurgerySettings.GetMeshReticleMinScale() * PerScopeMeshSurgerySettings.GetGlobalReticleMultiplier();
+                float maxMeshScale = PerScopeMeshSurgerySettings.GetMeshReticleMaxScale() * PerScopeMeshSurgerySettings.GetGlobalReticleMultiplier();
                 if (minMeshScale > 0f && maxMeshScale > 0f)
                 {
                     if (maxMeshScale < minMeshScale)
@@ -900,7 +900,7 @@ namespace PiPDisabler
 
         float angularSize = _baseScale / referenceLensDistance;
         float ndcSize = angularSize / referenceTanHalfFov;
-        ndcSize *= Settings.GlobalReticleScalingMultiplier.Value;
+        ndcSize *= PerScopeMeshSurgerySettings.GetGlobalReticleMultiplier();
         ndcSize = Mathf.Clamp(ndcSize, 0.01f, 2f);
 
             Vector2 zeroClip = GetZeroClipOffset(cam);

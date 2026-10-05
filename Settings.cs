@@ -705,8 +705,27 @@ namespace PiPDisabler
             var live = new HashSet<ConfigEntryBase>
             {
                 ModEnabled, FovAnimationDuration, OutsideScopeBlurEnabled, NvgLensFocalBlurEnabled,
-                CotiThermalLensOnly, CotiCenterInScope, CotiLensOnlyFlipY
+                CotiThermalLensOnly, CotiCenterInScope, CotiLensOnlyFlipY,
+                GlobalScopeScalingMultiplier, GlobalReticleScalingMultiplier
             };
+
+            // Per-scope values: applied live and auto-saved for the scope being aimed.
+            _perScopeLive.Clear();
+            _perScopeRecut.Clear();
+            foreach (var entry in ConfigEntries)
+            {
+                if (entry == null || entry.Definition.Section != "Per scope settings") continue;
+                if (entry.SettingType == typeof(KeyCode) || entry == CurrentScopeStatus) continue;
+                _perScopeLive.Add(entry);
+            }
+            foreach (var entry in new ConfigEntryBase[]
+                     {
+                         CustomPlaneOffsetMeters, CustomPlane1Radius, CustomPlane1OffsetMeters,
+                         CustomPlane2Position, CustomPlane2Radius, CustomPlane3Position, CustomPlane3Radius,
+                         CustomPlane4Position, CustomPlane4Radius, CustomCutStartOffset, CustomCutLength,
+                         CustomNearPreserveDepth, CustomExpandSearchToWeaponRoot
+                     })
+                _perScopeRecut.Add(entry);
 
             foreach (var entry in ConfigEntries)
             {
@@ -724,17 +743,31 @@ namespace PiPDisabler
         }
 
         private static readonly HashSet<ConfigEntryBase> _reapplyOnChange = new HashSet<ConfigEntryBase>();
+        private static readonly HashSet<ConfigEntryBase> _perScopeLive = new HashSet<ConfigEntryBase>();
+        private static readonly HashSet<ConfigEntryBase> _perScopeRecut = new HashSet<ConfigEntryBase>();
         private static ConfigFile _reapplyConfig;
 
         private static void OnReapplySettingChanged(object sender, SettingChangedEventArgs args)
         {
-            if (args?.ChangedSetting != null && _reapplyOnChange.Contains(args.ChangedSetting))
+            var changed = args?.ChangedSetting;
+            if (changed == null) return;
+
+            if (_reapplyOnChange.Contains(changed))
+            {
                 ScopeLifecycle.RequestReapply();
+                return;
+            }
+
+            if (_perScopeLive.Contains(changed) && PerScopeMeshSurgerySettings.ApplyLiveEditFromCustom())
+            {
+                if (_perScopeRecut.Contains(changed))
+                    ScopeLifecycle.RequestRecut();
+            }
         }
 
         private static void OnCustomVisualEffectSettingChanged(object sender, System.EventArgs args)
         {
-            PerScopeMeshSurgerySettings.SaveActiveScopeVisualSettings();
+            // Saving is done by the live per-scope edit handler (OnReapplySettingChanged).
             ScopeEffectsRenderer.RefreshSettings();
         }
 
