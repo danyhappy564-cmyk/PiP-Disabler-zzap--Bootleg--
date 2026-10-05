@@ -62,6 +62,8 @@ namespace PiPDisabler
         public static ConfigEntry<string> CurrentScopeStatus;
         public static ConfigEntry<float> CustomZoomMultiplier;
         public static ConfigEntry<float> CustomCutWidthMultiplier;
+        public static ConfigEntry<bool> CustomCutManual;
+        public static ConfigEntry<bool> AutoCutShape;
         public static ConfigEntry<KeyCode> SaveCustomMeshSurgerySettingsKey;
         public static ConfigEntry<KeyCode> DeleteCustomMeshSurgerySettingsKey;
         public static ConfigEntry<float> CustomPlaneOffsetMeters;
@@ -221,6 +223,11 @@ namespace PiPDisabler
                     "Be aware that 1x is always forced to 35° for stepped optics.",
                     new AcceptableValueRange<float>(20f, 35f),
                     new ConfigurationManagerAttributes { IsAdvanced = true })));
+            ConfigEntries.Add(AutoCutShape = config.Bind("General", "Automatic Cut Shape", true,
+                new ConfigDescription(
+                    "Cut the hole through the scope body automatically from the eyepiece lens size (keeps the scope's outside). Off = use the hand-set hole values for every scope.",
+                    null,
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(FovAnimationDuration = config.Bind("General", "FOV Animation Duration", 0.35f,
                 new ConfigDescription(
                     "Duration of the FOV transitions when entering/leaving the scope and changing magnification. Long values feel like flying into the scope; 0.2-0.35 matches the ADS animation, 0 = instant.",
@@ -417,6 +424,11 @@ namespace PiPDisabler
                 new ConfigDescription(
                     "Scales the middle and front radii of the hole cut through the scope body (1 = as set, smaller = less of the scope's outside is cut).",
                     new AcceptableValueRange<float>(0.2f, 2f),
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
+            ConfigEntries.Add(CustomCutManual = config.Bind("Per scope settings", "Use Manual Cut Shape", false,
+                new ConfigDescription(
+                    "This scope uses the hand-set hole values below instead of the automatic hole.",
+                    null,
                     new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(SaveCustomMeshSurgerySettingsKey = config.Bind("Per scope settings", "Save custom settings key", KeyCode.None,
                 new ConfigDescription(
@@ -748,7 +760,7 @@ namespace PiPDisabler
                          CustomPlaneOffsetMeters, CustomPlane1Radius, CustomPlane1OffsetMeters,
                          CustomPlane2Position, CustomPlane2Radius, CustomPlane3Position, CustomPlane3Radius,
                          CustomPlane4Position, CustomPlane4Radius, CustomCutStartOffset, CustomCutLength,
-                         CustomNearPreserveDepth, CustomExpandSearchToWeaponRoot, CustomCutWidthMultiplier
+                         CustomNearPreserveDepth, CustomExpandSearchToWeaponRoot, CustomCutWidthMultiplier, CustomCutManual
                      })
                 _perScopeRecut.Add(entry);
 

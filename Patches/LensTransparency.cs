@@ -54,6 +54,33 @@ namespace PiPDisabler
         /// <summary>
         /// Full cleanup for shutdown or mod disable.
         /// </summary>
+        /// <summary>
+        /// World-space radius of the eyepiece lens ("backLens") of the current scope, read from the
+        /// original mesh kept while the lens is hidden. 0 when unknown. Used by the automatic hole.
+        /// </summary>
+        internal static float GetEyepieceLensRadius(Transform scopeRoot)
+        {
+            float best = 0f;
+            foreach (var e in _hidden)
+            {
+                var tf = e.Renderer != null ? e.Renderer.transform : null;
+                if (tf == null || e.OriginalMesh == null) continue;
+                if (scopeRoot != null && tf != scopeRoot && !tf.IsChildOf(scopeRoot)) continue;
+                if (tf.name.IndexOf("backlens", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+                best = Mathf.Max(best, WorldRadius(e.OriginalMesh, tf));
+            }
+            return best;
+        }
+
+        private static float WorldRadius(Mesh mesh, Transform tf)
+        {
+            Vector3 ext = mesh.bounds.extents;
+            Vector3 sc = tf.lossyScale;
+            float x = Mathf.Abs(ext.x * sc.x), y = Mathf.Abs(ext.y * sc.y), z = Mathf.Abs(ext.z * sc.z);
+            // A lens is a thin disc: its radius is the larger of the two big extents.
+            return Mathf.Max(x, Mathf.Max(y, z));
+        }
+
         public static void FullRestoreAll()
         {
             RestoreAll();

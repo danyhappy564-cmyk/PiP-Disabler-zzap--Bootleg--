@@ -129,8 +129,12 @@ namespace PiPDisabler
                 "0 = 끔. 쏠 때 조준선과 렌즈가 어긋나 보이면 조금씩 바꿔 보세요(음수 = 반대 방향)." + PerScope + Rarely),
 
             // The "hole": the mod cuts a tunnel through the scope body so you can see through it.
+            [K("General", "Automatic Cut Shape")] = new Text(CatPerScope, "몸통 구멍 자동 계산 (모든 스코프)",
+                "켜면 렌즈 크기를 재서 구멍을 자동으로 뚫습니다: 렌즈 크기만큼의 통로가 앞쪽으로 조금씩만 넓어지는 모양이라 스코프 안쪽은 지워지고 겉모양은 남습니다. 끄면 모든 스코프가 아래 수동 값을 씁니다." + Live),
+            [K("Per scope settings", "Use Manual Cut Shape")] = new Text(CatPerScope, "이 스코프는 수동 구멍 사용",
+                "켜면 이 스코프만 자동 계산 대신 아래 '몸통 구멍 - …' 수동 값을 씁니다." + PerScopeCut),
             [K("Per scope settings", "Cut Width Multiplier")] = new Text(CatPerScope, "몸통 구멍 - 넓이",
-                "스코프 앞쪽(바깥 모양이 잘리는 부분)의 구멍 넓이. 겉모양이 너무 잘려 보이면 줄이고(0.3~0.6), 렌즈 너머에 뭔가 걸려 보이면 늘리세요. 스코프 안쪽 구멍은 그대로라 줄여도 렌즈 안은 계속 보임. 1 = 그대로." + PerScopeCut),
+                "자동 구멍: 앞쪽으로 갈수록 넓어지는 정도(1 = 기본, 0.2 = 거의 곧은 통로, 2 = 두 배로 넓게). 수동 구멍: 스코프 앞쪽 구멍 크기 배수. 겉모양이 잘려 보이면 줄이고, 렌즈 너머에 총 앞부분이 걸려 보이면 늘리세요." + PerScopeCut),
             [K("Per scope settings", "CutLength")] = new Text(CatPerScope, "몸통 구멍 - 깊이",
                 "이 모드는 스코프 몸통에 구멍을 뚫어 그 사이로 봅니다. 렌즈 안에 몸통 안쪽(검은 원통)이 보이면 늘리세요." + PerScopeCut),
             [K("Per scope settings", "Plane1Radius")] = new Text(CatPerScope, "몸통 구멍 - 눈 쪽 크기",
@@ -243,6 +247,7 @@ namespace PiPDisabler
             K("Per scope settings", "Weapon Scale Multiplier"),
             K("Per scope settings", "CutLength"),
             K("Per scope settings", "Cut Width Multiplier"),
+            K("Per scope settings", "Use Manual Cut Shape"),
             K("General", "Auto Disable For NV/Thermals"),
             K("General", "Baseline FOV"),
         };

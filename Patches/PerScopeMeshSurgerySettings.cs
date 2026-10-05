@@ -36,6 +36,7 @@ namespace PiPDisabler
         public bool ExpandSearchToWeaponRoot;
         public float ZoomMultiplier = 1f;
         public float CutWidthMultiplier = 1f;
+        public bool CutManual;
     }
 
     [Serializable]
@@ -124,6 +125,16 @@ namespace PiPDisabler
             return Mathf.Max(radius * GetCutWidthMultiplier(), inner);
         }
 
+        /// <summary>Automatic hole shape unless turned off globally or this scope chose its manual values.</summary>
+        internal static bool IsAutoCut()
+        {
+            if (!Settings.AutoCutShape.Value) return false;
+            var entry = ActiveScopeOverride;
+            return entry == null || !entry.CutManual;
+        }
+
+        internal static float GetCutWidthMultiplierRaw() => GetCutWidthMultiplier();
+
         /// <summary>"구멍 넓이": scales the hole's front radii (1 = as set).</summary>
         internal static float GetCutWidthMultiplier()
         {
@@ -202,6 +213,7 @@ namespace PiPDisabler
                 Settings.CustomExpandSearchToWeaponRoot.Value = entry.ExpandSearchToWeaponRoot;
                 Settings.CustomZoomMultiplier.Value = entry.ZoomMultiplier > 0.01f ? entry.ZoomMultiplier : 1f;
                 Settings.CustomCutWidthMultiplier.Value = entry.CutWidthMultiplier > 0.01f ? entry.CutWidthMultiplier : 1f;
+                Settings.CustomCutManual.Value = entry.CutManual;
                 PiPDisablerPlugin.DebugLogInfo(hasEntry
                     ? $"[CustomMeshSettings] Loaded saved settings for scope '{entry.ScopeKey}' into Custom config entries."
                     : $"[CustomMeshSettings] No saved settings for scope '{entry.ScopeKey}' — Custom config entries show the defaults.");
@@ -299,6 +311,7 @@ namespace PiPDisabler
             target.ExpandSearchToWeaponRoot = Settings.CustomExpandSearchToWeaponRoot.Value;
             target.ZoomMultiplier = Settings.CustomZoomMultiplier.Value;
             target.CutWidthMultiplier = Settings.CustomCutWidthMultiplier.Value;
+            target.CutManual = Settings.CustomCutManual.Value;
         }
 
         internal static bool IsSyncing => _syncingCustomConfig;
@@ -425,6 +438,7 @@ namespace PiPDisabler
             target.ExpandSearchToWeaponRoot = Settings.ExpandSearchToWeaponRoot.Value;
             target.ZoomMultiplier = 1f;
             target.CutWidthMultiplier = 1f;
+            target.CutManual = false;
         }
 
         private static void EnsureLoaded()

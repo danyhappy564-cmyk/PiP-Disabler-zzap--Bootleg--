@@ -326,6 +326,43 @@ namespace PiPDisabler
                 : MeshPlaneCutter.KeepSide.Negative;
 
 
+            // Automatic hole: a tube the size of the eyepiece lens that widens only slightly towards
+            // the front — the shape the hand-tuned presets converge to (median of 82: ~lens radius
+            // near the eyepiece, slow flare after). Removes the scope's inside, keeps its outside.
+            bool autoCut = false;
+            float autoR1 = 0f, autoR2 = 0f, autoR3 = 0f, autoR4 = 0f, autoP2 = 0f, autoP3 = 0f;
+            float autoStart = 0f, autoLen = 0f, autoPreserve = 0f;
+            if (PerScopeMeshSurgerySettings.IsAutoCut())
+            {
+                float lensR = LensTransparency.GetEyepieceLensRadius(scopeRoot);
+                if (lensR > 0.003f && lensR < 0.05f)
+                {
+                    const float Margin = 1.15f;
+                    const float BaseFlare = 0.04f; // radius growth per metre in front of the lens (×"넓이")
+                    float r = lensR * Margin + 0.001f;
+                    float flare = BaseFlare * PerScopeMeshSurgerySettings.GetCutWidthMultiplierRaw();
+                    autoStart = PerScopeMeshSurgerySettings.GetCutStartOffset();
+                    autoLen = Mathf.Max(PerScopeMeshSurgerySettings.GetCutLength(), autoStart + 0.05f);
+                    autoPreserve = PerScopeMeshSurgerySettings.GetNearPreserveDepth();
+                    float front = autoLen - autoStart;           // distance cut in front of the lens
+                    autoR1 = r;                                   // behind the lens: lens-sized tube
+                    autoP2 = Mathf.Clamp01(autoStart / autoLen);  // lens plane
+                    autoR2 = r;
+                    autoP3 = Mathf.Clamp01(autoP2 + (1f - autoP2) * 0.5f);
+                    autoR3 = r + flare * front * 0.5f;
+                    autoR4 = r + flare * front;
+                    autoCut = true;
+                    PiPDisablerPlugin.DebugLogInfo(
+                        $"[MeshSurgery] Auto hole: lens r={lensR * 1000f:F1}mm → tube r={r * 1000f:F1}mm, " +
+                        $"flare={flare:F3}/m, front={front:F2}m (far r={autoR4 * 1000f:F0}mm)");
+                }
+                else
+                {
+                    PiPDisablerPlugin.DebugLogInfo(
+                        $"[MeshSurgery] Auto hole skipped (eyepiece lens radius {lensR * 1000f:F1}mm not usable) — using manual hole values.");
+                }
+            }
+
             RestoreOriginalMeshes(cache);
             DestroyCutMeshes(cache);
             cache.Entries.Clear();
@@ -373,7 +410,15 @@ namespace PiPDisabler
 
                     int vertsBefore = readable.vertexCount;
                     bool ok;
-                    if (isCylinder)
+                    if (isCylinder && autoCut)
+                    {
+                        ok = MeshPlaneCutter.CutMeshFrustum(readable, mf.transform,
+                            planePoint, planeNormal, autoR1, autoR4, autoStart, autoLen,
+                            keepInside: false, midRadius: autoR2, midPosition: autoP2,
+                            nearPreserveDepth: autoPreserve,
+                            plane3Radius: autoR3, plane3Position: autoP3, plane4Position: 1f);
+                    }
+                    else if (isCylinder)
                     {
                         float nearR = PerScopeMeshSurgerySettings.GetPlane1Radius();
                         float startOff = PerScopeMeshSurgerySettings.GetCutStartOffset();
@@ -743,7 +788,8 @@ namespace PiPDisabler
         {
             return string.Join("|", new[]
             {
-                "Cylinder",
+                PerScopeMeshSurgerySettings.IsAutoCut() ? "Auto" : "Cylinder",
+                PerScopeMeshSurgerySettings.GetCutWidthMultiplierRaw().ToString("F3"),
                 PerScopeMeshSurgerySettings.GetPlaneOffsetMeters().ToString("F4"),
                 PerScopeMeshSurgerySettings.GetPlane1OffsetMeters().ToString("F4"),
                 PerScopeMeshSurgerySettings.GetPlane1Radius().ToString("F4"),
