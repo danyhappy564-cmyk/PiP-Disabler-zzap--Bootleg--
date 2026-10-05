@@ -17,7 +17,7 @@ namespace PiPDisabler
 
     public sealed class PiPDisablerPlugin : BaseUnityPlugin
     {
-        public const string PluginVersion = "2.2.2";
+        public const string PluginVersion = "2.3.0";
 
         public static ManualLogSource LogSource;
         internal static PiPDisablerPlugin Instance;
@@ -99,6 +99,18 @@ namespace PiPDisabler
         }
 
 
+        internal static void Notify(string message)
+        {
+            try
+            {
+                EFT.Communications.NotificationManager.DisplayMessageNotification(message);
+            }
+            catch (Exception ex)
+            {
+                DebugLogInfo($"[Notify] {message} (notification failed: {ex.Message})");
+            }
+        }
+
         private void Update()
         {
             if (Settings.ModToggleKey.Value != KeyCode.None && InputProxy.GetKeyDown(Settings.ModToggleKey.Value))
@@ -124,6 +136,7 @@ namespace PiPDisabler
                 if (string.IsNullOrWhiteSpace(scopeKey))
                 {
                     DebugLogInfo("[CustomMeshSettings] Save ignored: no active scope key");
+                    Notify("PiP-Disabler: 스코프로 조준한 채로 눌러 주세요");
                 }
                 else
                 {
@@ -131,6 +144,8 @@ namespace PiPDisabler
                     DebugLogInfo(saved
                         ? $"[CustomMeshSettings] Saved custom settings for scope key '{scopeKey}'"
                         : "[CustomMeshSettings] Save failed");
+                    Notify(saved ? $"PiP-Disabler: '{scopeKey}' 전용 설정 저장 — 바로 적용" : "PiP-Disabler: 저장 실패");
+                    if (saved) ScopeLifecycle.ReapplyCurrentScope("per-scope settings saved");
                 }
             }
 
@@ -140,6 +155,7 @@ namespace PiPDisabler
                 if (string.IsNullOrWhiteSpace(scopeKey))
                 {
                     DebugLogInfo("[CustomMeshSettings] Delete ignored: no active scope key");
+                    Notify("PiP-Disabler: 스코프로 조준한 채로 눌러 주세요");
                 }
                 else
                 {
@@ -147,8 +163,12 @@ namespace PiPDisabler
                     DebugLogInfo(removed
                         ? $"[CustomMeshSettings] Deleted custom settings for scope key '{scopeKey}'"
                         : $"[CustomMeshSettings] No custom settings existed for scope key '{scopeKey}'");
+                    Notify(removed ? $"PiP-Disabler: '{scopeKey}' 전용 설정 삭제 — 기본값으로" : $"PiP-Disabler: '{scopeKey}'에는 전용 설정이 없음");
+                    if (removed) ScopeLifecycle.ReapplyCurrentScope("per-scope settings deleted");
                 }
             }
+
+            ScopeLifecycle.TickPendingReapply();
 
             if (!ScopeLifecycle.ShouldRunUpdateLoop())
                 return;
@@ -156,6 +176,7 @@ namespace PiPDisabler
             PiPDisabler.TickBaseOpticCamera();
             ScopeLifecycle.CheckAndUpdate("Update");
             ScopeLifecycle.Tick();
+            Patches.MagicOpticMountCompat.Tick();
         }
     }
 }

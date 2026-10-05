@@ -494,6 +494,52 @@ namespace PiPDisabler
             return ResolveWhitelistScopeKey(os);
         }
 
+        // ── Live re-apply after a settings change ───────────────────────────
+        private const float ReapplyDelay = 0.4f; // debounce slider drags
+        private static float _reapplyAt = -1f;
+
+        public static void RequestReapply()
+        {
+            _reapplyAt = Time.realtimeSinceStartup + ReapplyDelay;
+        }
+
+        /// <summary>Called every frame from the plugin Update.</summary>
+        public static void TickPendingReapply()
+        {
+            if (_reapplyAt < 0f || Time.realtimeSinceStartup < _reapplyAt) return;
+            _reapplyAt = -1f;
+            ReapplyCurrentScope("settings changed");
+        }
+
+        /// <summary>Exit and re-enter the current scope so changed settings take effect now.</summary>
+        public static void ReapplyCurrentScope(string reason)
+        {
+            if (!Settings.ModEnabled.Value || !_isScoped) return;
+            PiPDisablerPlugin.DebugLogInfo($"[ScopeLifecycle] Re-applying current scope ({reason})");
+            ForceExit();
+            SyncState();
+        }
+
+        /// <summary>One-glance state for the F12 panel (Korean).</summary>
+        public static string GetStatusText()
+        {
+            if (!Settings.ModEnabled.Value)
+                return "모드가 꺼져 있음";
+
+            var os = _activeOptic;
+            if (!_isScoped || os == null)
+                return "조준 안 함 — 스코프로 조준하면 여기에 표시됩니다";
+
+            string key = ResolveWhitelistScopeKey(os);
+            string mode = _modBypassedForCurrentScope
+                ? "원래 방식(PiP)으로 보는 중 — 이 스코프엔 아래 설정이 적용되지 않음"
+                : "PiP-Disabler 적용 중";
+            string custom = PerScopeMeshSurgerySettings.GetActiveOverride() != null
+                ? "있음 (저장된 값 사용 중)"
+                : "없음 (기본값 사용 중)";
+            return $"스코프: {key}\n상태: {mode}\n전용 설정: {custom}";
+        }
+
         public static void ToggleActiveScopeWhitelistEntry()
         {
             var player = GetLocalPlayer();
@@ -975,6 +1021,7 @@ namespace PiPDisabler
             CameraSettingsManager.ForceRestore();
             PiPDisabler.RestoreAllCameras();
             Patches.VanillaOpticSuppression.RestoreVanillaOpticState(os);
+            Patches.MagicOpticMountCompat.RequestResync(os);
 
             if (os != null)
                 MeshSurgeryManager.RestoreForScope(os.transform);

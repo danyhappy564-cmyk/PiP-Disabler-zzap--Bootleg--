@@ -127,12 +127,18 @@ namespace PiPDisabler
             try
             {
                 _syncingCustomConfig = true;
-                if (entry == null)
+                bool hasEntry = entry != null;
+                if (!hasEntry)
                 {
-                    Settings.CustomVignetteOpacity.Value = 0f;
-                    Settings.CustomVignetteRadius.Value = 0f;
-                    Settings.CustomVignetteSoftness.Value = 0f;
-                    return;
+                    // No saved values: show the values actually in use (global defaults) instead of
+                    // whatever the previous scope left behind, so saving starts from the real state.
+                    entry = new ScopeMeshSurgerySettingsEntry { ScopeKey = _activeScopeKey };
+                    CopyGlobalSettingsTo(entry);
+                    entry.WeaponScaleMinMagnification = Settings.ManualWeaponScale.Value;
+                    entry.WeaponScaleMaxMagnification = Settings.ManualWeaponScale.Value;
+                    entry.VignetteOpacity = 0f;
+                    entry.VignetteRadius = 0f;
+                    entry.VignetteSoftness = 0f;
                 }
 
                 Settings.CustomPlaneOffsetMeters.Value = entry.PlaneOffsetMeters;
@@ -159,7 +165,9 @@ namespace PiPDisabler
                 Settings.CustomVignetteRadius.Value = entry.VignetteRadius;
                 Settings.CustomVignetteSoftness.Value = entry.VignetteSoftness;
                 Settings.CustomExpandSearchToWeaponRoot.Value = entry.ExpandSearchToWeaponRoot;
-                PiPDisablerPlugin.DebugLogInfo($"[CustomMeshSettings] Loaded saved settings for scope '{entry.ScopeKey}' into Custom config entries.");
+                PiPDisablerPlugin.DebugLogInfo(hasEntry
+                    ? $"[CustomMeshSettings] Loaded saved settings for scope '{entry.ScopeKey}' into Custom config entries."
+                    : $"[CustomMeshSettings] No saved settings for scope '{entry.ScopeKey}' — Custom config entries show the defaults.");
             }
             catch (Exception ex)
             {

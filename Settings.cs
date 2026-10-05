@@ -59,6 +59,7 @@ namespace PiPDisabler
         public static ConfigEntry<bool> DebugShowHousingMask;
 
         // --- Custom Mesh Surgery settings (per-scope authoring) ---
+        public static ConfigEntry<string> CurrentScopeStatus;
         public static ConfigEntry<KeyCode> SaveCustomMeshSurgerySettingsKey;
         public static ConfigEntry<KeyCode> DeleteCustomMeshSurgerySettingsKey;
         public static ConfigEntry<float> CustomPlaneOffsetMeters;
@@ -400,6 +401,11 @@ namespace PiPDisabler
                     new ConfigurationManagerAttributes { IsAdvanced = true })));
 
             // --- Custom Mesh Surgery settings ---
+            ConfigEntries.Add(CurrentScopeStatus = config.Bind("Per scope settings", "Current scope", "",
+                new ConfigDescription(
+                    "Shows the scope you are aiming with, whether the mod or vanilla PiP is drawing it, and whether it has saved per-scope settings.",
+                    null,
+                    new ConfigurationManagerAttributes { IsAdvanced = false, ReadOnly = true, HideDefaultButton = true, CustomDrawer = DrawCurrentScopeStatus })));
             ConfigEntries.Add(SaveCustomMeshSurgerySettingsKey = config.Bind("Per scope settings", "Save custom settings key", KeyCode.None,
                 new ConfigDescription(
                     "When pressed while scoped, saves all values from this category for the active scope key into custom_mesh_surgery_settings.json.",
@@ -656,6 +662,8 @@ namespace PiPDisabler
                     null,
                     new ConfigurationManagerAttributes { IsAdvanced = true })));
             RegisterVisualEffectLiveUpdates();
+            RegisterReapplyOnChange();
+            SettingsKorean.Apply(ConfigEntries);
             RecalcOrder();
         }
 
@@ -682,6 +690,46 @@ namespace PiPDisabler
             OutsideScopeBlurRadialGateSoftness.SettingChanged += OnVisualEffectSettingChanged;
             NvgLensFocalBlurEnabled.SettingChanged += OnVisualEffectSettingChanged;
             NvgLensFocalBlurRadiusMultiplier.SettingChanged += OnVisualEffectSettingChanged;
+        }
+
+        private static void DrawCurrentScopeStatus(ConfigEntryBase entry)
+        {
+            GUILayout.Label(ScopeLifecycle.GetStatusText(), GUILayout.ExpandWidth(true));
+        }
+
+        // Settings whose effect is built on scope enter (FOV, scaling, mesh cut, bypass lists...)
+        // re-apply the current scope shortly after a change, so the change is visible while aiming.
+        // Visual-effect settings already update live; per-scope values apply through the save key.
+        private static void RegisterReapplyOnChange()
+        {
+            var live = new HashSet<ConfigEntryBase>
+            {
+                ModEnabled, FovAnimationDuration, OutsideScopeBlurEnabled, NvgLensFocalBlurEnabled,
+                CotiThermalLensOnly, CotiCenterInScope, CotiLensOnlyFlipY
+            };
+
+            foreach (var entry in ConfigEntries)
+            {
+                if (entry == null || live.Contains(entry)) continue;
+                string section = entry.Definition.Section;
+                if (section == "Scope Effects" || section == "Per scope settings" || section == "Debug") continue;
+                if (entry.SettingType == typeof(KeyCode)) continue;
+                _reapplyOnChange.Add(entry);
+            }
+
+            if (_reapplyConfig != null)
+                _reapplyConfig.SettingChanged -= OnReapplySettingChanged;
+            _reapplyConfig = ModEnabled.ConfigFile;
+            _reapplyConfig.SettingChanged += OnReapplySettingChanged;
+        }
+
+        private static readonly HashSet<ConfigEntryBase> _reapplyOnChange = new HashSet<ConfigEntryBase>();
+        private static ConfigFile _reapplyConfig;
+
+        private static void OnReapplySettingChanged(object sender, SettingChangedEventArgs args)
+        {
+            if (args?.ChangedSetting != null && _reapplyOnChange.Contains(args.ChangedSetting))
+                ScopeLifecycle.RequestReapply();
         }
 
         private static void OnCustomVisualEffectSettingChanged(object sender, System.EventArgs args)

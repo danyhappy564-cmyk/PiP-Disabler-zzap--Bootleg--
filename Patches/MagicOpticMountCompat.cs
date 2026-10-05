@@ -80,6 +80,57 @@ namespace PiPDisabler.Patches
             return false;
         }
 
+        // ── Re-sync after a bypass ──────────────────────────────────────────
+        // ApplyBypassState hands the optic back to vanilla with CopyComponentFromOptic. On a sight
+        // switch that runs before EFT points pwa.CurrentScope at the new optic, so MagicOpticMount's
+        // postfix skips it ("not us") and vanilla's part switches the device thermal off again.
+        // Repeat the call once the current scope really is this optic.
+
+        private const int ResyncWindowFrames = 120;
+        private static OpticSight _pendingResync;
+        private static int _resyncUntilFrame;
+
+        public static void RequestResync(OpticSight os)
+        {
+            if (os == null || !Installed) return;
+            _pendingResync = os;
+            _resyncUntilFrame = Time.frameCount + ResyncWindowFrames;
+        }
+
+        public static void Tick()
+        {
+            var os = _pendingResync;
+            if (os == null) return;
+
+            if (Time.frameCount > _resyncUntilFrame || !ScopeLifecycle.IsModBypassedForCurrentScope || !os.enabled)
+            {
+                _pendingResync = null;
+                return;
+            }
+
+            try
+            {
+                var pwa = Helpers.GetLocalPlayer()?.ProceduralWeaponAnimation;
+                var current = pwa?.CurrentScope;
+                if (current == null || !current.IsOptic) return;
+                var cache = current.ScopePrefabCache;
+                if (cache == null || cache.CurrentModOpticSight != os) return;
+
+                _pendingResync = null;
+                if (!ShouldBypass(os)) return;
+
+                var updater = CameraManager.Exist ? CameraManager.Instance?.OpticCameraManager?.Updater : null;
+                if (updater == null) return;
+                updater.CopyComponentFromOptic(os);
+                PiPDisablerPlugin.DebugLogInfo($"[MagicOpticMountCompat] Re-synced optic camera for '{os.name}' (device effect re-applied).");
+            }
+            catch (System.Exception ex)
+            {
+                _pendingResync = null;
+                PiPDisablerPlugin.DebugLogInfo($"[MagicOpticMountCompat] Re-sync failed: {ex.Message}");
+            }
+        }
+
         private static bool IsSpecialOptic(OpticSight os)
         {
             var data = os.ScopeData;
