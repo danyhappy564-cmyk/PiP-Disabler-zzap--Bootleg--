@@ -48,6 +48,9 @@ namespace PiPDisabler
         private static ScopeMeshSurgerySettingsFile _file = new ScopeMeshSurgerySettingsFile();
         private static bool _loaded;
         private static string _activeScopeKey;
+        // Last scope aimed with: F12 edits made after leaving the scope still belong to it.
+        private static string _lastScopeKey;
+        internal static string LastScopeKey => _lastScopeKey;
         private static bool _syncingCustomConfig;
 
         private static string FilePath => Path.Combine(GetPluginRootDirectory(), "custom_mesh_surgery_settings.json");
@@ -119,6 +122,8 @@ namespace PiPDisabler
         internal static void SetActiveScope(string scopeKey)
         {
             _activeScopeKey = string.IsNullOrWhiteSpace(scopeKey) ? null : scopeKey.Trim();
+            if (_activeScopeKey != null)
+                _lastScopeKey = _activeScopeKey;
             SyncCustomConfigFromOverride();
         }
 
@@ -274,7 +279,7 @@ namespace PiPDisabler
 
         internal static bool IsSyncing => _syncingCustomConfig;
 
-        private const float WriteDelay = 0.5f;
+        private const float WriteDelay = 0.3f;
         private static float _writeDueAt = -1f;
 
         /// <summary>
@@ -283,11 +288,13 @@ namespace PiPDisabler
         /// </summary>
         internal static bool ApplyLiveEditFromCustom()
         {
-            if (_syncingCustomConfig || string.IsNullOrWhiteSpace(_activeScopeKey))
-                return false;
+            if (_syncingCustomConfig) return false;
+            string key = !string.IsNullOrWhiteSpace(_activeScopeKey) ? _activeScopeKey : _lastScopeKey;
+            if (string.IsNullOrWhiteSpace(key)) return false;
 
             EnsureLoaded();
-            CopyCustomTo(GetOrCreateEntry(_activeScopeKey));
+            CopyCustomTo(GetOrCreateEntry(key));
+            _writeKey = key;
             _writeDueAt = Time.realtimeSinceStartup + WriteDelay;
             return true;
         }
@@ -295,10 +302,19 @@ namespace PiPDisabler
         internal static void TickPendingWrite()
         {
             if (_writeDueAt < 0f || Time.realtimeSinceStartup < _writeDueAt) return;
+            FlushPendingWrite();
+        }
+
+        /// <summary>Writes a pending auto-save now (also called on game exit).</summary>
+        internal static void FlushPendingWrite()
+        {
+            if (_writeDueAt < 0f) return;
             _writeDueAt = -1f;
             WriteToDisk();
-            PiPDisablerPlugin.DebugLogInfo($"[CustomMeshSettings] Auto-saved per-scope settings ('{_activeScopeKey ?? "?"}').");
+            PiPDisablerPlugin.LogSource.LogInfo($"[CustomMeshSettings] Auto-saved per-scope settings ('{_writeKey ?? "?"}').");
         }
+
+        private static string _writeKey;
 
         /// <summary>The global multipliers only apply to scopes without their own saved settings.</summary>
         internal static float GetGlobalReticleMultiplier()
@@ -421,7 +437,7 @@ namespace PiPDisabler
             }
             catch (Exception ex)
             {
-                PiPDisablerPlugin.DebugLogInfo($"[CustomMeshSettings] Failed to save settings json: {ex.Message}");
+                PiPDisablerPlugin.LogSource.LogError($"[CustomMeshSettings] Failed to save settings json: {ex.Message}");
             }
         }
 

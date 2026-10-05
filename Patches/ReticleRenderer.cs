@@ -702,7 +702,10 @@ namespace PiPDisabler
                         $"opticPitch={Mathf.Asin(Mathf.Clamp(opticForward.y, -1f, 1f)) * Mathf.Rad2Deg:F3} " +
                         $"zeroPitch={Mathf.Asin(Mathf.Clamp(zeroDir.y, -1f, 1f)) * Mathf.Rad2Deg:F3} " +
                         $"camPitchBefore={Mathf.Asin(Mathf.Clamp(_attachedCamera != null ? _attachedCamera.transform.forward.y : 0f, -1f, 1f)) * Mathf.Rad2Deg:F3} " +
-                        $"rawVsSmoothed={Vector3.Angle(local, _zeroLocal):F3}");
+                        $"rawVsSmoothed={Vector3.Angle(local, _zeroLocal):F3} " +
+                        $"fov={(_attachedCamera != null ? _attachedCamera.fieldOfView : 0f):F3} " +
+                        $"boneInCamMm={(_attachedCamera != null ? (_attachedCamera.transform.InverseTransformPoint(bone.position) * 1000f).ToString("F2") : "?")} " +
+                        $"ribcage={(Helpers.GetLocalPlayer() != null ? Helpers.GetLocalPlayer().RibcageScaleCurrent : 0f):F4}");
                 }
 
                 _zeroedForward = bone.TransformDirection(_zeroLocal).normalized;

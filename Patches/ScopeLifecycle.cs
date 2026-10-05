@@ -559,7 +559,12 @@ namespace PiPDisabler
 
             var os = _activeOptic;
             if (!_isScoped || os == null)
-                return "조준 안 함 — 스코프로 조준하면 여기에 표시됩니다";
+            {
+                string last = PerScopeMeshSurgerySettings.LastScopeKey;
+                return string.IsNullOrEmpty(last)
+                    ? "조준 안 함 — 스코프로 조준하면 여기에 표시됩니다"
+                    : $"조준 안 함 — 마지막으로 조준한 스코프: {last}\n지금 아래 값을 바꾸면 이 스코프에 저장됩니다(화면엔 다시 조준하면 보임)";
+            }
 
             string key = ResolveWhitelistScopeKey(os);
             string mode = _modBypassedForCurrentScope

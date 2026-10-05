@@ -17,7 +17,7 @@ namespace PiPDisabler
 
     public sealed class PiPDisablerPlugin : BaseUnityPlugin
     {
-        public const string PluginVersion = "2.5.1";
+        public const string PluginVersion = "2.5.2";
 
         public static ManualLogSource LogSource;
         internal static PiPDisablerPlugin Instance;
@@ -53,8 +53,14 @@ namespace PiPDisabler
         }
 
               
+        private void OnApplicationQuit()
+        {
+            PerScopeMeshSurgerySettings.FlushPendingWrite();
+        }
+
         private void OnDestroy()
         {
+            PerScopeMeshSurgerySettings.FlushPendingWrite();
             // Plugin unload or game exit — restore everything
             ScopeLifecycle.ForceExit();
             CameraSettingsManager.ForceRestore();
