@@ -630,7 +630,12 @@ namespace PiPDisabler
         private static Transform _scopeDataTransform;
         private static Vector3 _zeroLocal;
         private static bool _zeroLocalValid;
-        private const float ZeroSmoothingRate = 8f;
+        // EFT changes the zero in small steps (~0.03° every ~12 frames, seen in a 2.5.2 diagnostic
+        // log) while it re-aims the weapon smoothly. Following each step quickly made the reticle —
+        // which fills the lens — judder at ~5 Hz on high zoom. A critically damped follow turns the
+        // steps into one smooth glide; sway does not move the bone-local zero, so it adds no lag there.
+        private const float ZeroSmoothTime = 0.3f;
+        private static Vector3 _zeroLocalVelocity;
         private const float MaxZeroCorrectionDeg = 5f;
         // Hysteresis: once aligned, keep aligning until the angle clearly exceeds the limit, so a
         // value hovering at the limit can't flip the camera between the two axes every frame.
@@ -679,6 +684,7 @@ namespace PiPDisabler
                 if (!_zeroLocalValid)
                 {
                     _zeroLocal = local;
+                    _zeroLocalVelocity = Vector3.zero;
                     _zeroLocalValid = true;
                 }
                 else
@@ -689,8 +695,8 @@ namespace PiPDisabler
                         if (Time.realtimeSinceStartup > _zeroDiagUntil) _zeroDiagLines = 0;
                         _zeroDiagUntil = Time.realtimeSinceStartup + 1.5f;
                     }
-                    float k = 1f - Mathf.Exp(-ZeroSmoothingRate * Time.unscaledDeltaTime);
-                    _zeroLocal = Vector3.Slerp(_zeroLocal, local, k);
+                    _zeroLocal = Vector3.SmoothDamp(_zeroLocal, local, ref _zeroLocalVelocity,
+                        ZeroSmoothTime, Mathf.Infinity, Time.unscaledDeltaTime).normalized;
                 }
 
                 if (Time.realtimeSinceStartup < _zeroDiagUntil && _zeroDiagLines < 400)
