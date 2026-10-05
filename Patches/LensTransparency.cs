@@ -60,16 +60,23 @@ namespace PiPDisabler
         /// </summary>
         internal static float GetEyepieceLensRadius(Transform scopeRoot)
         {
-            float best = 0f;
+            // Several "backLens" meshes can exist (an Epic scope had a 61-vertex disc and a 16-vertex
+            // plane); the round disc with the most vertices is the eyepiece. Planes (<20 verts) are
+            // only a fallback.
+            float best = 0f, fallback = 0f;
+            int bestVerts = -1;
             foreach (var e in _hidden)
             {
                 var tf = e.Renderer != null ? e.Renderer.transform : null;
                 if (tf == null || e.OriginalMesh == null) continue;
                 if (scopeRoot != null && tf != scopeRoot && !tf.IsChildOf(scopeRoot)) continue;
                 if (tf.name.IndexOf("backlens", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
-                best = Mathf.Max(best, WorldRadius(e.OriginalMesh, tf));
+                float r = WorldRadius(e.OriginalMesh, tf);
+                int verts = e.OriginalMesh.vertexCount;
+                if (verts < 20) { fallback = Mathf.Max(fallback, r); continue; }
+                if (verts > bestVerts || (verts == bestVerts && r > best)) { best = r; bestVerts = verts; }
             }
-            return best;
+            return best > 0f ? best : fallback;
         }
 
         private static float WorldRadius(Mesh mesh, Transform tf)

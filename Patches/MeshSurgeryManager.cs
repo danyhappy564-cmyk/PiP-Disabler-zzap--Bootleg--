@@ -332,6 +332,7 @@ namespace PiPDisabler
             bool autoCut = false;
             float autoR1 = 0f, autoR2 = 0f, autoR3 = 0f, autoR4 = 0f, autoP2 = 0f, autoP3 = 0f;
             float autoStart = 0f, autoLen = 0f, autoPreserve = 0f;
+            Vector3 autoEye = Vector3.zero;
             if (PerScopeMeshSurgerySettings.IsAutoCut())
             {
                 float lensR = LensTransparency.GetEyepieceLensRadius(scopeRoot);
@@ -351,8 +352,9 @@ namespace PiPDisabler
                     autoP3 = Mathf.Clamp01(autoP2 + (1f - autoP2) * 0.5f);
                     autoR3 = r + flare * front * 0.5f;
                     autoR4 = r + flare * front;
+                    autoEye = planePoint - planeNormal * 0.12f; // a point on the bore axis behind the eyepiece
                     autoCut = true;
-                    PiPDisablerPlugin.DebugLogInfo(
+                    PiPDisablerPlugin.LogSource.LogInfo(
                         $"[MeshSurgery] Auto hole: lens r={lensR * 1000f:F1}mm → tube r={r * 1000f:F1}mm, " +
                         $"flare={flare:F3}/m, front={front:F2}m (far r={autoR4 * 1000f:F0}mm)");
                 }
@@ -416,7 +418,8 @@ namespace PiPDisabler
                             planePoint, planeNormal, autoR1, autoR4, autoStart, autoLen,
                             keepInside: false, midRadius: autoR2, midPosition: autoP2,
                             nearPreserveDepth: autoPreserve,
-                            plane3Radius: autoR3, plane3Position: autoP3, plane4Position: 1f);
+                            plane3Radius: autoR3, plane3Position: autoP3, plane4Position: 1f,
+                            eyeWorld: autoEye);
                     }
                     else if (isCylinder)
                     {
@@ -793,13 +796,14 @@ namespace PiPDisabler
 
         internal static int GetAutoZoomBucket()
         {
-            float fov = FovController.LastAppliedFov;
-            if (fov <= 0.1f) fov = FovController.ComputeZoomedFov();
-            float baseFov = FovController.MagnificationBaselineFov;
-            float mag = fov > 0.1f
-                ? Mathf.Tan(baseFov * Mathf.Deg2Rad * 0.5f) / Mathf.Tan(fov * Mathf.Deg2Rad * 0.5f)
-                : 1f;
-            float factor = Mathf.Clamp(4f / Mathf.Max(mag, 0.1f), 1f, 4f);
+            // Fitted for the scope's LOWEST zoom (× its 확대 배수): the widest view it will show.
+            // One cut per scope — following the current zoom re-cut on every zoom change and the
+            // hole looked different after zooming in and back out (user report, Razor).
+            var range = FovController.GetTemplateZoomRange();
+            float minZoom = Mathf.Min(range.min, range.max);
+            if (minZoom <= 0.1f) minZoom = 1f;
+            float mag = minZoom * PerScopeMeshSurgerySettings.GetZoomMultiplier();
+            float factor = Mathf.Clamp(6f / Mathf.Max(mag, 0.1f), 1f, 6f);
             return Mathf.RoundToInt(Mathf.Log(factor) / Mathf.Log(AutoZoomBucketStep));
         }
 

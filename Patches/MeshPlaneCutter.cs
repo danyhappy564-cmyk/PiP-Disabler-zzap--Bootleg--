@@ -241,9 +241,17 @@ namespace PiPDisabler
             float plane3Radius = 0f,
             float plane3Position = 0.66f,
             float plane4Position = 1f,
-            float epsilon = 1e-5f)
+            float epsilon = 1e-5f,
+            Vector3? eyeWorld = null)
         {
             if (mesh == null || nearRadius <= 0 || length <= 0) return false;
+            // eyeWorld set (automatic hole): inside the volume only faces that face the eye are
+            // removed. Inner walls/rings face the eye and block the view; the scope's outer skin
+            // faces away — seen from the eye it is a back face (culled), seen from outside it is the
+            // scope's shape — so it stays even where the hole is wider than the tube.
+            bool facingTest = eyeWorld.HasValue;
+            Vector3 eyeL = facingTest ? meshTransform.InverseTransformPoint(eyeWorld.Value) : Vector3.zero;
+            bool flipWinding = facingTest && meshTransform.localToWorldMatrix.determinant < 0f;
             if (farRadius <= 0) farRadius = nearRadius;
             Vector3 cL = meshTransform.InverseTransformPoint(centerWorld);
             Vector3 aL = meshTransform.InverseTransformDirection(axisWorld).normalized;
@@ -335,6 +343,16 @@ namespace PiPDisabler
                         keepTri = in0 || in1 || in2; // keep if any vertex inside
                     else
                         keepTri = !in0 && !in1 && !in2;
+
+                    if (!keepTri && facingTest)
+                    {
+                        Vector3 v0 = verts[i0], v1 = verts[i1], v2 = verts[i2];
+                        Vector3 n = Vector3.Cross(v1 - v0, v2 - v0);
+                        if (flipWinding) n = -n;
+                        Vector3 c = (v0 + v1 + v2) * (1f / 3f);
+                        if (Vector3.Dot(n, eyeL - c) <= 0f)
+                            keepTri = true; // faces away from the eye: keep (outer skin)
+                    }
                     if (keepTri)
                     {
                         outTris[s].Add(AddVertexFromOld(i0));

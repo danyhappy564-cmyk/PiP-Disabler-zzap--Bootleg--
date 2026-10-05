@@ -101,7 +101,7 @@ namespace PiPDisabler
             [K("Per scope settings", "Current scope")] = new Text(CatPerScope, "지금 조준 중인 스코프",
                 "어떤 스코프인지, 이 모드가 적용 중인지, 전용 설정이 있는지 보여줍니다. 조준한 채로 F12를 열어 보세요."),
             [K("Per scope settings", "Zoom Multiplier")] = new Text(CatPerScope, "확대 배수",
-                "이 스코프가 얼마나 당겨질지. 1 = 원래 배율, 2 = 두 배 더 당김, 0.5 = 절반만. 배율 조절 스코프는 전 구간에 같이 적용. 많이 당기면 스코프 몸통도 커 보이니 '총 크기'를 같이 올려 보세요." + PerScope),
+                "이 스코프가 얼마나 당겨질지. 1 = 원래 배율, 2 = 두 배 더 당김, 0.5 = 절반만. 배율 조절 스코프는 전 구간에 같이 적용. 마우스 감도도 같은 비율로 자동 조절됨. 많이 당기면 스코프 몸통도 커 보이니 '총 크기'를 같이 올려 보세요." + PerScope),
             [K("Per scope settings", "Save custom settings key")] = new Text(CatPerScope, "(자동 저장이라 필요 없음)", ""),
             [K("Per scope settings", "DeleteCustomMeshSurgerySettingsKey")] = new Text(CatPerScope, "이 스코프 설정 초기화 키",
                 "조준한 채로 누르면 이 스코프에 저장한 값을 지우고 기본값으로 돌아갑니다(화면에 알림)."),
