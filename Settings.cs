@@ -15,7 +15,6 @@ namespace PiPDisabler
 
         // --- General ---
         public static ConfigEntry<bool> AutoDisableForVariableScopes;
-        public static ConfigEntry<bool> ThermalScopesWithoutPiP;
         public static ConfigEntry<string> AutoBypassNameContains;
         public static ConfigEntry<string> ScopeBlacklistNames;
         public static ConfigEntry<KeyCode> ScopeBlacklistToggleEntryKey;
@@ -146,11 +145,6 @@ namespace PiPDisabler
                     "Automatically disable the mod for thermal/night vision scopes.",
                     null,
                     new ConfigurationManagerAttributes { IsAdvanced = true })));
-            ConfigEntries.Add(ThermalScopesWithoutPiP = config.Bind("General", "Thermal scopes without PiP", true,
-                new ConfigDescription(
-                    "Experimental. Thermal scopes (not night vision) are handled by this mod too: while aiming, the scope's thermal image is put on the main camera (the whole screen turns thermal, the scope body included). Off = thermal scopes follow 'Auto Disable For NV/Thermals'.",
-                    null,
-                    new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(AutoBypassNameContains = config.Bind("General", "Auto Bypass Name Contains", "d-evo; scope_ags_npz_pag17_2,7x",
                 new ConfigDescription(
                     "Semi-colon separated list. Any scope whose object name or scope key contains one of these gets bypassed",

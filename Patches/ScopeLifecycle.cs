@@ -211,7 +211,6 @@ namespace PiPDisabler
                     ApplyFov(true);
                 }
                 CameraSettingsManager.ApplyForOptic(os);
-                Patches.MainCameraThermal.OnScopeEnter(os);
             }
 
             CheckAndUpdate("OnOpticEnabled");
@@ -470,7 +469,6 @@ namespace PiPDisabler
 
         public static void ForceExit()
         {
-            Patches.MainCameraThermal.Restore();
             _meshSurgerySuppressedByReload = false;
             _reticleSuppressedByReload = false;
             FreelookTracker.Reset();
@@ -773,7 +771,6 @@ namespace PiPDisabler
             }
 
             if (Settings.AutoDisableForVariableScopes.Value
-                && !(Settings.ThermalScopesWithoutPiP.Value && Patches.MainCameraThermal.IsThermalOnly(os))
                 && IsThermalOrNightVisionOptic(os))
             {
                 return true;
@@ -971,7 +968,6 @@ namespace PiPDisabler
             _postExitRestoreFov = 0f;
             _postExitRestoreExpiry = 0f;
 
-            Patches.MainCameraThermal.Restore();
             Patches.WeaponScalingPatch.RestoreScale();
             ReticleRenderer.Cleanup();
             ScopeEffectsRenderer.Cleanup();
@@ -1081,9 +1077,6 @@ namespace PiPDisabler
             _postExitRestoreFov = 0f;
             FovController.OnModeSwitch();
             ApplyFov(true);
-
-            // 9. Thermal scope → its thermal image on the main camera.
-            Patches.MainCameraThermal.OnScopeEnter(os);
         }
 
         private static void DoScopeExit()
@@ -1105,7 +1098,6 @@ namespace PiPDisabler
             _isScoped = false;
             _activeOptic = null;
             PerScopeMeshSurgerySettings.ClearActiveScope();
-            Patches.MainCameraThermal.Restore();
 
             // If this scope was bypassed, skip mod cleanup paths.
             if (_modBypassedForCurrentScope)
