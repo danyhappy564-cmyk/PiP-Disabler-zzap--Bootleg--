@@ -35,6 +35,7 @@ namespace PiPDisabler
         public float VignetteSoftness;
         public bool ExpandSearchToWeaponRoot;
         public float ZoomMultiplier = 1f;
+        public float CutWidthMultiplier = 1f;
     }
 
     [Serializable]
@@ -72,11 +73,11 @@ namespace PiPDisabler
             float anchoredDepth = p2LegacyNormalized * legacyReferenceCutLength;
             return cutLength > 1e-5f ? Mathf.Clamp01(anchoredDepth / cutLength) : 0f;
         }
-        internal static float GetPlane2Radius() => ActiveScopeOverride != null ? ActiveScopeOverride.Plane2Radius : Settings.Plane2Radius.Value;
+        internal static float GetPlane2Radius() => (ActiveScopeOverride != null ? ActiveScopeOverride.Plane2Radius : Settings.Plane2Radius.Value) * GetCutWidthMultiplier();
         internal static float GetPlane3Position() => ActiveScopeOverride != null ? ActiveScopeOverride.Plane3Position : Settings.Plane3Position.Value;
-        internal static float GetPlane3Radius() => ActiveScopeOverride != null ? ActiveScopeOverride.Plane3Radius : Settings.Plane3Radius.Value;
+        internal static float GetPlane3Radius() => (ActiveScopeOverride != null ? ActiveScopeOverride.Plane3Radius : Settings.Plane3Radius.Value) * GetCutWidthMultiplier();
         internal static float GetPlane4Position() => ActiveScopeOverride != null ? ActiveScopeOverride.Plane4Position : Settings.Plane4Position.Value;
-        internal static float GetPlane4Radius() => ActiveScopeOverride != null ? ActiveScopeOverride.Plane4Radius : Settings.Plane4Radius.Value;
+        internal static float GetPlane4Radius() => (ActiveScopeOverride != null ? ActiveScopeOverride.Plane4Radius : Settings.Plane4Radius.Value) * GetCutWidthMultiplier();
         internal static float GetCutStartOffset() => ActiveScopeOverride != null ? ActiveScopeOverride.CutStartOffset : Settings.CutStartOffset.Value;
         internal static float GetCutLength() => ActiveScopeOverride != null ? ActiveScopeOverride.CutLength : Settings.CutLength.Value;
         internal static float GetNearPreserveDepth() => ActiveScopeOverride != null ? ActiveScopeOverride.NearPreserveDepth : Settings.NearPreserveDepth.Value;
@@ -114,6 +115,13 @@ namespace PiPDisabler
                 ? entry.VisualRecoilCompensation
                 : Settings.VisualRecoilCompensation.Value;
         }
+        /// <summary>"구멍 넓이": scales the hole's middle/front radii together (1 = as set).</summary>
+        internal static float GetCutWidthMultiplier()
+        {
+            var entry = ActiveScopeOverride;
+            return entry != null && entry.CutWidthMultiplier > 0.01f ? entry.CutWidthMultiplier : 1f;
+        }
+
         /// <summary>Extra zoom for the active scope (1 = the scope's own magnification).</summary>
         internal static float GetZoomMultiplier()
         {
@@ -184,6 +192,7 @@ namespace PiPDisabler
                 Settings.CustomVignetteSoftness.Value = entry.VignetteSoftness;
                 Settings.CustomExpandSearchToWeaponRoot.Value = entry.ExpandSearchToWeaponRoot;
                 Settings.CustomZoomMultiplier.Value = entry.ZoomMultiplier > 0.01f ? entry.ZoomMultiplier : 1f;
+                Settings.CustomCutWidthMultiplier.Value = entry.CutWidthMultiplier > 0.01f ? entry.CutWidthMultiplier : 1f;
                 PiPDisablerPlugin.DebugLogInfo(hasEntry
                     ? $"[CustomMeshSettings] Loaded saved settings for scope '{entry.ScopeKey}' into Custom config entries."
                     : $"[CustomMeshSettings] No saved settings for scope '{entry.ScopeKey}' — Custom config entries show the defaults.");
@@ -280,6 +289,7 @@ namespace PiPDisabler
             target.VignetteSoftness = Settings.CustomVignetteSoftness.Value;
             target.ExpandSearchToWeaponRoot = Settings.CustomExpandSearchToWeaponRoot.Value;
             target.ZoomMultiplier = Settings.CustomZoomMultiplier.Value;
+            target.CutWidthMultiplier = Settings.CustomCutWidthMultiplier.Value;
         }
 
         internal static bool IsSyncing => _syncingCustomConfig;
@@ -302,12 +312,14 @@ namespace PiPDisabler
             MarkUserEdited(key);
             _writeKey = key;
             _writeDueAt = Time.realtimeSinceStartup + WriteDelay;
+            SettingsApplyGate.NoteChange();
             return true;
         }
 
         internal static void TickPendingWrite()
         {
             if (_writeDueAt < 0f || Time.realtimeSinceStartup < _writeDueAt) return;
+            if (!SettingsApplyGate.CanApply) return; // write once when the F12 window closes
             FlushPendingWrite();
         }
 
@@ -403,6 +415,7 @@ namespace PiPDisabler
             target.VignetteSoftness = Settings.CustomVignetteSoftness.Value;
             target.ExpandSearchToWeaponRoot = Settings.ExpandSearchToWeaponRoot.Value;
             target.ZoomMultiplier = 1f;
+            target.CutWidthMultiplier = 1f;
         }
 
         private static void EnsureLoaded()

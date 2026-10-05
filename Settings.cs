@@ -61,6 +61,7 @@ namespace PiPDisabler
         // --- Custom Mesh Surgery settings (per-scope authoring) ---
         public static ConfigEntry<string> CurrentScopeStatus;
         public static ConfigEntry<float> CustomZoomMultiplier;
+        public static ConfigEntry<float> CustomCutWidthMultiplier;
         public static ConfigEntry<KeyCode> SaveCustomMeshSurgerySettingsKey;
         public static ConfigEntry<KeyCode> DeleteCustomMeshSurgerySettingsKey;
         public static ConfigEntry<float> CustomPlaneOffsetMeters;
@@ -316,12 +317,12 @@ namespace PiPDisabler
                     "Radius (meters) at plane 2.",
                     new AcceptableValueRange<float>(0f, 0.2f),
                     new ConfigurationManagerAttributes { IsAdvanced = true })));
-            ConfigEntries.Add(Plane3Position = config.Bind("Global Mesh Surgery settings", "Plane3Position", 0.55f,
+            ConfigEntries.Add(Plane3Position = config.Bind("Global Mesh Surgery settings", "Plane3Position", 0.41f,
                 new ConfigDescription(
                     "Normalized depth of plane 3 from near (0) to far (1).",
                     new AcceptableValueRange<float>(0f, 1f),
                     new ConfigurationManagerAttributes { IsAdvanced = true })));
-            ConfigEntries.Add(Plane3Radius = config.Bind("Global Mesh Surgery settings", "Plane3Radius", 0.2f,
+            ConfigEntries.Add(Plane3Radius = config.Bind("Global Mesh Surgery settings", "Plane3Radius", 0.11f,
                 new ConfigDescription(
                     "Radius (meters) at plane 3.",
                     new AcceptableValueRange<float>(0f, 0.2f),
@@ -344,12 +345,12 @@ namespace PiPDisabler
                     "Changing CutLength does NOT move this plane.",
                     new AcceptableValueRange<float>(0f, 0.3f),
                     new ConfigurationManagerAttributes { IsAdvanced = true })));
-            ConfigEntries.Add(CutLength = config.Bind("Global Mesh Surgery settings", "CutLength", 0.755493f,
+            ConfigEntries.Add(CutLength = config.Bind("Global Mesh Surgery settings", "CutLength", 2f,
                 new ConfigDescription(
                     "How far forward from the near plane the cut extends (toward the objective).\n" +
                     "The far plane is at: nearPlane + (length × boreAxis).\n" +
                     "Only the far plane moves when you change this value.",
-                    new AcceptableValueRange<float>(0.01f, 1f),
+                    new AcceptableValueRange<float>(0.01f, 4f),
                     new ConfigurationManagerAttributes { IsAdvanced = true })));
             ConfigEntries.Add(NearPreserveDepth = config.Bind("Global Mesh Surgery settings", "NearPreserveDepth", 0.02549295f,
                 new ConfigDescription(
@@ -411,6 +412,11 @@ namespace PiPDisabler
                 new ConfigDescription(
                     "Extra zoom for the scope being aimed (1 = its own magnification, 2 = twice as much). Applied live and saved for that scope.",
                     new AcceptableValueRange<float>(0.25f, 4f),
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
+            ConfigEntries.Add(CustomCutWidthMultiplier = config.Bind("Per scope settings", "Cut Width Multiplier", 1f,
+                new ConfigDescription(
+                    "Scales the middle and front radii of the hole cut through the scope body (1 = as set, smaller = less of the scope's outside is cut).",
+                    new AcceptableValueRange<float>(0.2f, 2f),
                     new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(SaveCustomMeshSurgerySettingsKey = config.Bind("Per scope settings", "Save custom settings key", KeyCode.None,
                 new ConfigDescription(
@@ -667,10 +673,23 @@ namespace PiPDisabler
                     "Legacy setting. Reticles now always draw after everything and use the after-NVG reticle shader.",
                     null,
                     new ConfigurationManagerAttributes { IsAdvanced = true })));
+            MigrateOldCutDefaults();
             RegisterVisualEffectLiveUpdates();
             RegisterReapplyOnChange();
             SettingsKorean.Apply(ConfigEntries);
             RecalcOrder();
+        }
+
+        /// <summary>
+        /// 2.5.5: the global hole defaults cut far more of the scope's outside than the bundled
+        /// per-scope presets (median of 82). BepInEx keeps old values in the cfg, so values still
+        /// at the old defaults are moved to the new ones once.
+        /// </summary>
+        private static void MigrateOldCutDefaults()
+        {
+            if (Mathf.Approximately(Plane3Position.Value, 0.55f)) Plane3Position.Value = 0.41f;
+            if (Mathf.Approximately(Plane3Radius.Value, 0.2f)) Plane3Radius.Value = 0.11f;
+            if (Mathf.Approximately(CutLength.Value, 0.755493f)) CutLength.Value = 2f;
         }
 
         private static void RegisterVisualEffectLiveUpdates()
@@ -729,7 +748,7 @@ namespace PiPDisabler
                          CustomPlaneOffsetMeters, CustomPlane1Radius, CustomPlane1OffsetMeters,
                          CustomPlane2Position, CustomPlane2Radius, CustomPlane3Position, CustomPlane3Radius,
                          CustomPlane4Position, CustomPlane4Radius, CustomCutStartOffset, CustomCutLength,
-                         CustomNearPreserveDepth, CustomExpandSearchToWeaponRoot
+                         CustomNearPreserveDepth, CustomExpandSearchToWeaponRoot, CustomCutWidthMultiplier
                      })
                 _perScopeRecut.Add(entry);
 

@@ -349,11 +349,12 @@ namespace PiPDisabler
                     continue;
 
                 Mesh originalAsset = mf.sharedMesh;
+                Mesh readable = null;
 
                 try
                 {
                     bool isCylinder = true;
-                    Mesh readable = MeshPlaneCutter.MakeReadableMeshCopy(originalAsset);
+                    readable = MeshPlaneCutter.MakeReadableMeshCopy(originalAsset);
                     if (readable == null)
                     {
                         PiPDisablerPlugin.DebugLogInfo(
@@ -410,17 +411,21 @@ namespace PiPDisabler
                         $"[MeshSurgery] Cut '{originalAsset.name}': {vertsBefore} → {readable.vertexCount} verts");
 
                     mf.sharedMesh = readable;
+                    var cutMesh = readable;
+                    readable = null; // owned by the cache now
                     cache.Entries.Add(new CutMeshEntry
                     {
                         Filter = mf,
                         OriginalMesh = originalAsset,
-                        CutMesh = readable,
+                        CutMesh = cutMesh,
                         Applied = true,
                         FilterPath = GetRelativePath(weaponRootTf, mf.transform)
                     });
                 }
                 catch (Exception ex)
                 {
+                    if (readable != null)
+                        UnityEngine.Object.Destroy(readable);
                     PiPDisablerPlugin.DebugLogInfo(
                         $"[MeshSurgery] Failed on '{originalAsset.name}': {ex.Message}");
                 }

@@ -13,41 +13,61 @@ namespace PiPDisabler
         {
             if (nonReadableMesh == null) return null;
 
-            Mesh meshCopy = new Mesh();
-            meshCopy.indexFormat = nonReadableMesh.indexFormat;
+            // Some runtime meshes (e.g. 'MuzzleJet UpdateOrCreateMesh') have no GPU vertex buffer.
+            // Bail out before allocating; a failed copy used to leak a Mesh (and GPU buffers) every rebuild.
+            if (nonReadableMesh.vertexBufferCount == 0 || nonReadableMesh.vertexCount == 0)
+                return null;
 
-            // Copy vertex buffer from GPU
-            GraphicsBuffer verticesBuffer = nonReadableMesh.GetVertexBuffer(0);
-            int totalSize = verticesBuffer.stride * verticesBuffer.count;
-            byte[] data = new byte[totalSize];
-            verticesBuffer.GetData(data);
-            meshCopy.SetVertexBufferParams(nonReadableMesh.vertexCount, nonReadableMesh.GetVertexAttributes());
-            meshCopy.SetVertexBufferData(data, 0, 0, totalSize);
-            verticesBuffer.Release();
-
-            // Copy index buffer from GPU
-            meshCopy.subMeshCount = nonReadableMesh.subMeshCount;
-            GraphicsBuffer indexesBuffer = nonReadableMesh.GetIndexBuffer();
-            int tot = indexesBuffer.stride * indexesBuffer.count;
-            byte[] indexesData = new byte[tot];
-            indexesBuffer.GetData(indexesData);
-            meshCopy.SetIndexBufferParams(indexesBuffer.count, nonReadableMesh.indexFormat);
-            meshCopy.SetIndexBufferData(indexesData, 0, 0, tot);
-            indexesBuffer.Release();
-
-            // Restore submesh structure
-            uint currentIndexOffset = 0;
-            for (int i = 0; i < meshCopy.subMeshCount; i++)
+            Mesh meshCopy = null;
+            GraphicsBuffer verticesBuffer = null;
+            GraphicsBuffer indexesBuffer = null;
+            bool ok = false;
+            try
             {
-                uint subMeshIndexCount = nonReadableMesh.GetIndexCount(i);
-                meshCopy.SetSubMesh(i, new SubMeshDescriptor((int)currentIndexOffset, (int)subMeshIndexCount));
-                currentIndexOffset += subMeshIndexCount;
+                verticesBuffer = nonReadableMesh.GetVertexBuffer(0);
+                indexesBuffer = nonReadableMesh.GetIndexBuffer();
+                if (verticesBuffer == null || indexesBuffer == null)
+                    return null;
+
+                meshCopy = new Mesh();
+                meshCopy.indexFormat = nonReadableMesh.indexFormat;
+
+                // Copy vertex buffer from GPU
+                int totalSize = verticesBuffer.stride * verticesBuffer.count;
+                byte[] data = new byte[totalSize];
+                verticesBuffer.GetData(data);
+                meshCopy.SetVertexBufferParams(nonReadableMesh.vertexCount, nonReadableMesh.GetVertexAttributes());
+                meshCopy.SetVertexBufferData(data, 0, 0, totalSize);
+
+                // Copy index buffer from GPU
+                meshCopy.subMeshCount = nonReadableMesh.subMeshCount;
+                int tot = indexesBuffer.stride * indexesBuffer.count;
+                byte[] indexesData = new byte[tot];
+                indexesBuffer.GetData(indexesData);
+                meshCopy.SetIndexBufferParams(indexesBuffer.count, nonReadableMesh.indexFormat);
+                meshCopy.SetIndexBufferData(indexesData, 0, 0, tot);
+
+                // Restore submesh structure
+                uint currentIndexOffset = 0;
+                for (int i = 0; i < meshCopy.subMeshCount; i++)
+                {
+                    uint subMeshIndexCount = nonReadableMesh.GetIndexCount(i);
+                    meshCopy.SetSubMesh(i, new SubMeshDescriptor((int)currentIndexOffset, (int)subMeshIndexCount));
+                    currentIndexOffset += subMeshIndexCount;
+                }
+
+                meshCopy.RecalculateNormals();
+                meshCopy.RecalculateBounds();
+                ok = true;
+                return meshCopy;
             }
-
-            meshCopy.RecalculateNormals();
-            meshCopy.RecalculateBounds();
-
-            return meshCopy;
+            finally
+            {
+                verticesBuffer?.Release();
+                indexesBuffer?.Release();
+                if (!ok && meshCopy != null)
+                    UnityEngine.Object.Destroy(meshCopy);
+            }
         }
 
         public static bool CutMeshDirect(

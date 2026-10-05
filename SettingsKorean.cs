@@ -12,7 +12,8 @@ namespace PiPDisabler
     internal static class SettingsKorean
     {
         private const string Live = "\n[바로 적용]";
-        private const string PerScope = "\n[바로 보임 · 지금 조준 중인 스코프에 자동 저장 — 조준한 채로 바꾸세요]";
+        private const string PerScope = "\n[바로 보임 · F12 창을 닫으면 지금(또는 마지막으로) 조준한 스코프에 저장]";
+        private const string PerScopeCut = "\n[F12 창을 닫으면 적용 · 그 스코프에 저장]";
         private const string Rarely = "\n※ 보통은 안 건드려도 됩니다.";
 
         private const string CatBasic = "1. 기본";
@@ -128,32 +129,34 @@ namespace PiPDisabler
                 "0 = 끔. 쏠 때 조준선과 렌즈가 어긋나 보이면 조금씩 바꿔 보세요(음수 = 반대 방향)." + PerScope + Rarely),
 
             // The "hole": the mod cuts a tunnel through the scope body so you can see through it.
+            [K("Per scope settings", "Cut Width Multiplier")] = new Text(CatPerScope, "몸통 구멍 - 넓이",
+                "구멍을 얼마나 넓게 뚫을지 한 번에 조절. 스코프 바깥 모양이 너무 잘려 보이면 줄이고(예: 0.6), 렌즈 너머에 뭔가 걸려 보이면 늘리세요. 1 = 그대로." + PerScopeCut),
             [K("Per scope settings", "CutLength")] = new Text(CatPerScope, "몸통 구멍 - 깊이",
-                "이 모드는 스코프 몸통에 구멍을 뚫어 그 사이로 봅니다. 렌즈 안에 몸통 안쪽(검은 원통)이 보이면 늘리세요." + PerScope),
+                "이 모드는 스코프 몸통에 구멍을 뚫어 그 사이로 봅니다. 렌즈 안에 몸통 안쪽(검은 원통)이 보이면 늘리세요." + PerScopeCut),
             [K("Per scope settings", "Plane1Radius")] = new Text(CatPerScope, "몸통 구멍 - 눈 쪽 크기",
-                "구멍은 눈 쪽에서 앞쪽 끝까지 점점 넓어지는 깔때기 모양입니다. 이건 눈 쪽 입구 크기. 클수록 넓게 뚫림." + PerScope + Rarely),
+                "구멍은 눈 쪽에서 앞쪽 끝까지 점점 넓어지는 깔때기 모양입니다. 이건 눈 쪽 입구 크기. 클수록 넓게 뚫림." + PerScopeCut + Rarely),
             [K("Per scope settings", "Plane2Position")] = new Text(CatPerScope, "몸통 구멍 - 중간1 위치",
-                "깔때기 중간 지점1이 어디쯤인지. 0 = 눈 쪽, 1 = 앞쪽 끝." + PerScope + Rarely),
+                "깔때기 중간 지점1이 어디쯤인지. 0 = 눈 쪽, 1 = 앞쪽 끝." + PerScopeCut + Rarely),
             [K("Per scope settings", "Plane2Radius")] = new Text(CatPerScope, "몸통 구멍 - 중간1 크기",
-                "그 지점의 구멍 크기. 클수록 넓게 뚫림." + PerScope + Rarely),
+                "그 지점의 구멍 크기. 클수록 넓게 뚫림." + PerScopeCut + Rarely),
             [K("Per scope settings", "Plane3Position")] = new Text(CatPerScope, "몸통 구멍 - 중간2 위치",
-                "0 = 눈 쪽, 1 = 앞쪽 끝." + PerScope + Rarely),
+                "0 = 눈 쪽, 1 = 앞쪽 끝." + PerScopeCut + Rarely),
             [K("Per scope settings", "Plane3Radius")] = new Text(CatPerScope, "몸통 구멍 - 중간2 크기",
-                "클수록 넓게 뚫림." + PerScope + Rarely),
+                "클수록 넓게 뚫림." + PerScopeCut + Rarely),
             [K("Per scope settings", "Plane4Position")] = new Text(CatPerScope, "몸통 구멍 - 앞쪽 끝 위치",
-                "보통 1." + PerScope + Rarely),
+                "보통 1." + PerScopeCut + Rarely),
             [K("Per scope settings", "Plane4Radius")] = new Text(CatPerScope, "몸통 구멍 - 앞쪽 끝 크기",
-                "구멍 맨 앞쪽 크기. 클수록 넓게 뚫림." + PerScope + Rarely),
+                "구멍 맨 앞쪽 크기. 클수록 넓게 뚫림." + PerScopeCut + Rarely),
             [K("Per scope settings", "CutStartOffset")] = new Text(CatPerScope, "몸통 구멍 - 뚫기 시작점",
-                "렌즈보다 얼마나 눈 쪽에서부터 뚫을지. 눈앞에 몸통이 걸리면 늘리세요." + PerScope + Rarely),
+                "렌즈보다 얼마나 눈 쪽에서부터 뚫을지. 눈앞에 몸통이 걸리면 늘리세요." + PerScopeCut + Rarely),
             [K("Per scope settings", "NearPreserveDepth")] = new Text(CatPerScope, "몸통 구멍 - 눈앞 테두리 남기기",
-                "눈 바로 앞의 스코프 테두리를 얼마나 남길지. 0 = 안 남김." + PerScope + Rarely),
+                "눈 바로 앞의 스코프 테두리를 얼마나 남길지. 0 = 안 남김." + PerScopeCut + Rarely),
             [K("Per scope settings", "PlaneOffsetMeters")] = new Text(CatPerScope, "몸통 구멍 - 미세 조정1",
-                "아주 작은 위치 조정. 거의 안 씀." + PerScope + Rarely),
+                "아주 작은 위치 조정. 거의 안 씀." + PerScopeCut + Rarely),
             [K("Per scope settings", "Plane1OffsetMeters")] = new Text(CatPerScope, "몸통 구멍 - 미세 조정2",
-                "눈 쪽 입구를 앞뒤로 아주 조금 옮김. 거의 안 씀." + PerScope + Rarely),
+                "눈 쪽 입구를 앞뒤로 아주 조금 옮김. 거의 안 씀." + PerScopeCut + Rarely),
             [K("Per scope settings", "ExpandSearchToWeaponRoot")] = new Text(CatPerScope, "몸통 구멍 - 마운트 등도 같이 뚫기",
-                "켜면 구멍에 걸리는 마운트·총 부품도 같이 뚫습니다." + PerScope + Rarely),
+                "켜면 구멍에 걸리는 마운트·총 부품도 같이 뚫습니다." + PerScopeCut + Rarely),
 
             // ── 4. 총 움직임 ──
             [K("Hacks", "Keep scope centered with zeroing")] = new Text(CatMotion, "영점 바꿔도 스코프는 화면 가운데",
@@ -239,6 +242,7 @@ namespace PiPDisabler
             K("Per scope settings", "Weapon Scale Max Magnification"),
             K("Per scope settings", "Weapon Scale Multiplier"),
             K("Per scope settings", "CutLength"),
+            K("Per scope settings", "Cut Width Multiplier"),
             K("General", "Auto Disable For NV/Thermals"),
             K("General", "Baseline FOV"),
         };

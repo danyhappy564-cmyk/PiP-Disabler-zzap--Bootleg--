@@ -494,47 +494,39 @@ namespace PiPDisabler
             return ResolveWhitelistScopeKey(os);
         }
 
-        // ── Live re-apply after a settings change ───────────────────────────
-        private const float ReapplyDelay = 0.4f; // debounce slider drags
-        private static float _reapplyAt = -1f;
+        // ── Settings changes: heavy work runs once, after the F12 window closes ──
+        // (re-entering the scope or re-cutting the scope body on every slider step allocated new
+        // meshes each time and blew up memory — 1111 re-cuts in one user log.)
+        private static bool _reapplyPending;
+        private static bool _recutPending;
 
         public static void RequestReapply()
         {
-            _reapplyAt = Time.realtimeSinceStartup + ReapplyDelay;
+            _reapplyPending = true;
+            SettingsApplyGate.NoteChange();
         }
-
-        /// <summary>Called every frame from the plugin Update.</summary>
-        public static void TickPendingReapply()
-        {
-            if (_reapplyAt < 0f || Time.realtimeSinceStartup < _reapplyAt) return;
-            _reapplyAt = -1f;
-            ReapplyCurrentScope("settings changed");
-        }
-
-        /// <summary>Exit and re-enter the current scope so changed settings take effect now.</summary>
-        public static void ReapplyCurrentScope(string reason)
-        {
-            if (!Settings.ModEnabled.Value || !_isScoped) return;
-            PiPDisablerPlugin.DebugLogInfo($"[ScopeLifecycle] Re-applying current scope ({reason})");
-            ForceExit();
-            SyncState();
-        }
-
-        // ── Live re-cut while a per-scope cut slider moves ──────────────────
-        private const float RecutInterval = 0.15f;
-        private static float _nextRecutAt;
-        private static bool _recutPending;
 
         public static void RequestRecut()
         {
             _recutPending = true;
+            SettingsApplyGate.NoteChange();
         }
 
-        public static void TickPendingRecut()
+        /// <summary>Called every frame from the plugin Update.</summary>
+        public static void TickPendingSettingWork()
         {
-            if (!_recutPending || Time.realtimeSinceStartup < _nextRecutAt) return;
+            if (!_reapplyPending && !_recutPending) return;
+            if (!SettingsApplyGate.CanApply) return;
+
+            bool reapply = _reapplyPending;
+            _reapplyPending = false;
             _recutPending = false;
-            _nextRecutAt = Time.realtimeSinceStartup + RecutInterval;
+
+            if (reapply)
+            {
+                ReapplyCurrentScope("settings changed"); // re-entering also re-cuts
+                return;
+            }
 
             var os = _activeOptic;
             if (!_isScoped || _modBypassedForCurrentScope || os == null || _meshSurgerySuppressedByReload) return;
@@ -544,11 +536,21 @@ namespace PiPDisabler
                 MeshSurgeryManager.RestoreForScope(os.transform);
                 MeshSurgeryManager.ApplyForOptic(os);
                 LensTransparency.HideAllLensSurfaces(os);
+                PiPDisablerPlugin.DebugLogInfo("[ScopeLifecycle] Scope body re-cut with the new settings.");
             }
             catch (Exception ex)
             {
-                PiPDisablerPlugin.DebugLogInfo($"[ScopeLifecycle] Live re-cut failed: {ex.Message}");
+                PiPDisablerPlugin.DebugLogInfo($"[ScopeLifecycle] Re-cut failed: {ex.Message}");
             }
+        }
+
+        /// <summary>Exit and re-enter the current scope so changed settings take effect now.</summary>
+        public static void ReapplyCurrentScope(string reason)
+        {
+            if (!Settings.ModEnabled.Value || !_isScoped) return;
+            PiPDisablerPlugin.DebugLogInfo($"[ScopeLifecycle] Re-applying current scope ({reason})");
+            ForceExit();
+            SyncState();
         }
 
         /// <summary>One-glance state for the F12 panel (Korean).</summary>
@@ -575,7 +577,7 @@ namespace PiPDisabler
                 : PerScopeMeshSurgerySettings.GetActiveOverride() != null
                     ? "모드 기본 내장값 사용 중 (바꾸면 내 값으로 저장)"
                     : "없음 (전체 기본값 사용 중)";
-            return $"스코프: {key}\n상태: {mode}\n전용 설정: {custom}\n(아래 '3. 스코프별 설정' 값을 바꾸면 바로 보이고 이 스코프에 자동 저장됩니다)";
+            return $"스코프: {key}\n상태: {mode}\n전용 설정: {custom}\n(크기·확대·조준선은 바로 보이고, 몸통 구멍은 F12 창을 닫으면 적용 · 창을 닫을 때 이 스코프에 저장)";
         }
 
         public static void ToggleActiveScopeWhitelistEntry()
