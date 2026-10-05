@@ -570,9 +570,11 @@ namespace PiPDisabler
             string mode = _modBypassedForCurrentScope
                 ? "원래 방식(PiP)으로 보는 중 — 이 스코프엔 아래 설정이 적용되지 않음"
                 : "PiP-Disabler 적용 중";
-            string custom = PerScopeMeshSurgerySettings.GetActiveOverride() != null
-                ? "있음 (저장된 값 사용 중)"
-                : "없음 (기본값 사용 중)";
+            string custom = PerScopeMeshSurgerySettings.IsUserEdited(key)
+                ? "내가 저장한 값 사용 중"
+                : PerScopeMeshSurgerySettings.GetActiveOverride() != null
+                    ? "모드 기본 내장값 사용 중 (바꾸면 내 값으로 저장)"
+                    : "없음 (전체 기본값 사용 중)";
             return $"스코프: {key}\n상태: {mode}\n전용 설정: {custom}\n(아래 '3. 스코프별 설정' 값을 바꾸면 바로 보이고 이 스코프에 자동 저장됩니다)";
         }
 

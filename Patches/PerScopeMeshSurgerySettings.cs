@@ -53,7 +53,11 @@ namespace PiPDisabler
         internal static string LastScopeKey => _lastScopeKey;
         private static bool _syncingCustomConfig;
 
+        // Bundled defaults ship in the plugin folder and are replaced by every mod update/reinstall.
         private static string FilePath => Path.Combine(GetPluginRootDirectory(), "custom_mesh_surgery_settings.json");
+        // The player's own per-scope edits live in BepInEx/config, which updates never touch.
+        private static string UserFilePath => Path.Combine(BepInEx.Paths.ConfigPath, "PiP-Disabler.scope-settings.json");
+        private static readonly HashSet<string> _userKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         private static ScopeMeshSurgerySettingsEntry ActiveScopeOverride => GetActiveOverride();
 
@@ -244,6 +248,7 @@ namespace PiPDisabler
             }
 
             CopyCustomTo(target);
+            MarkUserEdited(scopeKey);
             WriteToDisk();
             return true;
         }
@@ -294,6 +299,7 @@ namespace PiPDisabler
 
             EnsureLoaded();
             CopyCustomTo(GetOrCreateEntry(key));
+            MarkUserEdited(key);
             _writeKey = key;
             _writeDueAt = Time.realtimeSinceStartup + WriteDelay;
             return true;
@@ -328,6 +334,7 @@ namespace PiPDisabler
             EnsureLoaded();
 
             var target = GetOrCreateEntry(_activeScopeKey);
+            MarkUserEdited(_activeScopeKey);
             target.VignetteOpacity = Settings.CustomVignetteOpacity.Value;
             target.VignetteRadius = Settings.CustomVignetteRadius.Value;
             target.VignetteSoftness = Settings.CustomVignetteSoftness.Value;
@@ -335,28 +342,21 @@ namespace PiPDisabler
         }
 
 
+        /// <summary>Removes the player's own settings for the scope (its bundled default, if any, applies again).</summary>
         internal static bool DeleteCustomSettingsForScope(string scopeKey)
         {
             if (string.IsNullOrWhiteSpace(scopeKey))
                 return false;
 
             EnsureLoaded();
+            if (!_userKeys.Remove(scopeKey))
+                return false;
 
-            for (int i = _file.Entries.Count - 1; i >= 0; i--)
-            {
-                var candidate = _file.Entries[i];
-                if (candidate == null || string.IsNullOrWhiteSpace(candidate.ScopeKey))
-                    continue;
-
-                if (!string.Equals(candidate.ScopeKey, scopeKey, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                _file.Entries.RemoveAt(i);
-                WriteToDisk();
-                return true;
-            }
-
-            return false;
+            _file.Entries.RemoveAll(e => e != null && string.Equals(e.ScopeKey, scopeKey, StringComparison.OrdinalIgnoreCase));
+            WriteToDisk();
+            _loaded = false; // re-merge so the bundled default for this scope is back
+            EnsureLoaded();
+            return true;
         }
 
         private static ScopeMeshSurgerySettingsEntry GetOrCreateEntry(string scopeKey)
@@ -411,29 +411,72 @@ namespace PiPDisabler
                 return;
 
             _loaded = true;
+            _file = ReadFile(FilePath) ?? new ScopeMeshSurgerySettingsFile();
+            _userKeys.Clear();
+
+            var user = ReadFile(UserFilePath);
+            int userCount = 0;
+            if (user != null)
+            {
+                foreach (var entry in user.Entries)
+                {
+                    if (entry == null || string.IsNullOrWhiteSpace(entry.ScopeKey)) continue;
+                    _file.Entries.RemoveAll(e => e != null && string.Equals(e.ScopeKey, entry.ScopeKey, StringComparison.OrdinalIgnoreCase));
+                    _file.Entries.Add(entry);
+                    _userKeys.Add(entry.ScopeKey);
+                    userCount++;
+                }
+            }
+
+            PiPDisablerPlugin.LogSource.LogInfo(
+                $"[CustomMeshSettings] Loaded {_file.Entries.Count - userCount} bundled + {userCount} saved-by-you scope settings ({UserFilePath}).");
+        }
+
+        private static ScopeMeshSurgerySettingsFile ReadFile(string path)
+        {
             try
             {
-                if (!File.Exists(FilePath))
-                    return;
-
-                string json = File.ReadAllText(FilePath);
-                var parsed = JsonConvert.DeserializeObject<ScopeMeshSurgerySettingsFile>(json);
-                if (parsed != null && parsed.Entries != null)
-                    _file = parsed;
+                if (!File.Exists(path))
+                    return null;
+                var parsed = JsonConvert.DeserializeObject<ScopeMeshSurgerySettingsFile>(File.ReadAllText(path));
+                return parsed != null && parsed.Entries != null ? parsed : null;
             }
             catch (Exception ex)
             {
-                PiPDisablerPlugin.DebugLogInfo($"[CustomMeshSettings] Failed to load settings json: {ex.Message}");
-                _file = new ScopeMeshSurgerySettingsFile();
+                PiPDisablerPlugin.LogSource.LogError($"[CustomMeshSettings] Failed to read {path}: {ex.Message}");
+                return null;
             }
         }
 
+        internal static bool IsUserEdited(string scopeKey)
+        {
+            EnsureLoaded();
+            return !string.IsNullOrWhiteSpace(scopeKey) && _userKeys.Contains(scopeKey);
+        }
+
+        private static void MarkUserEdited(string scopeKey)
+        {
+            if (!string.IsNullOrWhiteSpace(scopeKey))
+                _userKeys.Add(scopeKey);
+        }
+
+        /// <summary>Writes only the player's own entries, to the config folder.</summary>
         private static void WriteToDisk()
         {
             try
             {
-                string json = JsonConvert.SerializeObject(_file, Formatting.Indented);
-                File.WriteAllText(FilePath, json);
+                var user = new ScopeMeshSurgerySettingsFile();
+                foreach (var entry in _file.Entries)
+                {
+                    if (entry != null && !string.IsNullOrWhiteSpace(entry.ScopeKey) && _userKeys.Contains(entry.ScopeKey))
+                        user.Entries.Add(entry);
+                }
+
+                string path = UserFilePath;
+                string tmp = path + ".tmp";
+                File.WriteAllText(tmp, JsonConvert.SerializeObject(user, Formatting.Indented));
+                if (File.Exists(path)) File.Delete(path);
+                File.Move(tmp, path);
             }
             catch (Exception ex)
             {
