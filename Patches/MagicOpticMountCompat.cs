@@ -43,11 +43,8 @@ namespace PiPDisabler.Patches
                 if (pwa == null || pwa.ScopeAimTransforms == null || pwa.ScopeAimTransforms.Count == 0)
                     return false;
 
-                // The device itself is thermal/NV — nothing for MagicOpticMount to add.
-                if (IsSpecialOptic(os)) return false;
-
-                Transform opticBone = FindBoneFor(pwa, os);
-                if (opticBone == null) return false;
+                Transform aimedBone = FindBoneFor(pwa, os);
+                if (aimedBone == null) return false;
 
                 var firearmController = player.HandsController as Player.FirearmController;
                 var weaponPrefab = firearmController?.Firearms?.WeaponPrefab;
@@ -55,19 +52,28 @@ namespace PiPDisabler.Patches
                 if (weaponRoot == null) return false;
                 Vector3 weaponForward = -weaponRoot.up;
 
+                // Aiming the normal optic: a thermal/NV device in front → MagicOpticMount shows it.
+                // Aiming the device itself: the normal optic behind it sits between the eye and the
+                // device and blocks the main camera (black disc); vanilla PiP renders from the device.
+                bool aimedIsDevice = IsSpecialOptic(os);
+
                 foreach (var sight in pwa.ScopeAimTransforms)
                 {
-                    if (sight == null || !sight.IsOptic || sight.Bone == null || sight.Bone == opticBone) continue;
+                    if (sight == null || !sight.IsOptic || sight.Bone == null || sight.Bone == aimedBone) continue;
                     var cache = sight.ScopePrefabCache;
                     if (cache == null) continue;
 
                     var other = cache.CurrentModOpticSight;
-                    if (other == null || !IsSpecialOptic(other)) continue;
+                    if (other == null || IsSpecialOptic(other) == aimedIsDevice) continue;
 
-                    if (AreSightsAligned(opticBone, sight.Bone, weaponForward))
+                    bool aligned = aimedIsDevice
+                        ? AreSightsAligned(sight.Bone, aimedBone, weaponForward)
+                        : AreSightsAligned(aimedBone, sight.Bone, weaponForward);
+                    if (aligned)
                     {
-                        PiPDisablerPlugin.DebugLogInfo(
-                            $"[MagicOpticMountCompat] '{os.name}' has an aligned thermal/NV device '{other.name}' in front — using vanilla PiP.");
+                        PiPDisablerPlugin.DebugLogInfo(aimedIsDevice
+                            ? $"[MagicOpticMountCompat] Device '{os.name}' is aimed with optic '{other.name}' behind it — using vanilla PiP."
+                            : $"[MagicOpticMountCompat] '{os.name}' has an aligned thermal/NV device '{other.name}' in front — using vanilla PiP.");
                         return true;
                     }
                 }
