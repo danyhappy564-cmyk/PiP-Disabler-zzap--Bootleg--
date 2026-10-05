@@ -130,7 +130,7 @@ namespace PiPDisabler
 
             // The "hole": the mod cuts a tunnel through the scope body so you can see through it.
             [K("Per scope settings", "Cut Width Multiplier")] = new Text(CatPerScope, "몸통 구멍 - 넓이",
-                "구멍을 얼마나 넓게 뚫을지 한 번에 조절. 스코프 바깥 모양이 너무 잘려 보이면 줄이고(예: 0.6), 렌즈 너머에 뭔가 걸려 보이면 늘리세요. 1 = 그대로." + PerScopeCut),
+                "스코프 앞쪽(바깥 모양이 잘리는 부분)의 구멍 넓이. 겉모양이 너무 잘려 보이면 줄이고(0.3~0.6), 렌즈 너머에 뭔가 걸려 보이면 늘리세요. 스코프 안쪽 구멍은 그대로라 줄여도 렌즈 안은 계속 보임. 1 = 그대로." + PerScopeCut),
             [K("Per scope settings", "CutLength")] = new Text(CatPerScope, "몸통 구멍 - 깊이",
                 "이 모드는 스코프 몸통에 구멍을 뚫어 그 사이로 봅니다. 렌즈 안에 몸통 안쪽(검은 원통)이 보이면 늘리세요." + PerScopeCut),
             [K("Per scope settings", "Plane1Radius")] = new Text(CatPerScope, "몸통 구멍 - 눈 쪽 크기",

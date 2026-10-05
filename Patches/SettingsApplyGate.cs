@@ -22,6 +22,25 @@ namespace PiPDisabler
 
         public static void NoteChange() => _lastChangeAt = Time.realtimeSinceStartup;
 
+        private static bool _wasOpen;
+        private static float _nextKoreanApplyAt = 10f;
+
+        /// <summary>
+        /// A translation plugin can overwrite our Korean names/categories after startup (a user's
+        /// F12 showed machine-translated names for older keys and ours only for new ones). Put ours
+        /// back 10 s after start and every time the window closes, so the next opening shows them.
+        /// </summary>
+        public static void Tick()
+        {
+            bool open = IsSettingsWindowOpen;
+            if ((_wasOpen && !open) || (_nextKoreanApplyAt > 0f && Time.realtimeSinceStartup >= _nextKoreanApplyAt))
+            {
+                _nextKoreanApplyAt = -1f;
+                SettingsKorean.Apply(Settings.ConfigEntries);
+            }
+            _wasOpen = open;
+        }
+
         /// <summary>True while the F12 settings window is open.</summary>
         public static bool IsSettingsWindowOpen
         {
