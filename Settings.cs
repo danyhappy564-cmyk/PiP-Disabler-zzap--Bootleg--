@@ -60,6 +60,7 @@ namespace PiPDisabler
 
         // --- Custom Mesh Surgery settings (per-scope authoring) ---
         public static ConfigEntry<string> CurrentScopeStatus;
+        public static ConfigEntry<float> CustomZoomMultiplier;
         public static ConfigEntry<KeyCode> SaveCustomMeshSurgerySettingsKey;
         public static ConfigEntry<KeyCode> DeleteCustomMeshSurgerySettingsKey;
         public static ConfigEntry<float> CustomPlaneOffsetMeters;
@@ -406,6 +407,11 @@ namespace PiPDisabler
                     "Shows the scope you are aiming with, whether the mod or vanilla PiP is drawing it, and whether it has saved per-scope settings.",
                     null,
                     new ConfigurationManagerAttributes { IsAdvanced = false, ReadOnly = true, HideDefaultButton = true, CustomDrawer = DrawCurrentScopeStatus })));
+            ConfigEntries.Add(CustomZoomMultiplier = config.Bind("Per scope settings", "Zoom Multiplier", 1f,
+                new ConfigDescription(
+                    "Extra zoom for the scope being aimed (1 = its own magnification, 2 = twice as much). Applied live and saved for that scope.",
+                    new AcceptableValueRange<float>(0.25f, 4f),
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(SaveCustomMeshSurgerySettingsKey = config.Bind("Per scope settings", "Save custom settings key", KeyCode.None,
                 new ConfigDescription(
                     "When pressed while scoped, saves all values from this category for the active scope key into custom_mesh_surgery_settings.json.",

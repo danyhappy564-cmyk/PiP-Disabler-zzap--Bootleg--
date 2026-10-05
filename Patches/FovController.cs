@@ -60,7 +60,7 @@ namespace PiPDisabler
                     PiPDisablerPlugin.DebugLogInfo(
                         $"[FovController] variable template FOV={variableFov:F2} deg t={smoothT:F3}");
                 }
-                return variableFov;
+                return ApplyZoomMultiplier(variableFov);
             }
 
             float magnification = GetEffectiveMagnification();
@@ -82,7 +82,17 @@ namespace PiPDisabler
                     $"{mapping} [{source}]");
             }
 
-            return resultFov;
+            return ApplyZoomMultiplier(resultFov);
+        }
+
+        /// <summary>Per-scope "확대 배수": narrows the FOV as if the scope magnified that much more.</summary>
+        private static float ApplyZoomMultiplier(float fov)
+        {
+            float zoom = PerScopeMeshSurgerySettings.GetZoomMultiplier();
+            if (Mathf.Abs(zoom - 1f) < 0.001f || fov <= 0.1f)
+                return fov;
+            float rad = 2f * Mathf.Atan(Mathf.Tan(fov * Mathf.Deg2Rad * 0.5f) / zoom);
+            return Mathf.Clamp(rad * Mathf.Rad2Deg, 0.5f, 120f);
         }
 
         /// <summary>
@@ -141,7 +151,8 @@ namespace PiPDisabler
             if (currentFov <= 0.1f)
                 return targetMag;
 
-            float fovMag = FovToMagnification(currentFov, MagnificationBaselineFov);
+            // The per-scope extra zoom is not part of the scope's own magnification range.
+            float fovMag = Mathf.Max(1f, FovToMagnification(currentFov, MagnificationBaselineFov) / PerScopeMeshSurgerySettings.GetZoomMultiplier());
             var range = GetTemplateZoomRange();
             float minMag = Mathf.Min(range.min, range.max);
             float maxMag = Mathf.Max(range.min, range.max);

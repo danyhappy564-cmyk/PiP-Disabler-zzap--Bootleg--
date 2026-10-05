@@ -34,6 +34,7 @@ namespace PiPDisabler
         public float VignetteRadius;
         public float VignetteSoftness;
         public bool ExpandSearchToWeaponRoot;
+        public float ZoomMultiplier = 1f;
     }
 
     [Serializable]
@@ -106,6 +107,12 @@ namespace PiPDisabler
                 ? entry.VisualRecoilCompensation
                 : Settings.VisualRecoilCompensation.Value;
         }
+        /// <summary>Extra zoom for the active scope (1 = the scope's own magnification).</summary>
+        internal static float GetZoomMultiplier()
+        {
+            var entry = ActiveScopeOverride;
+            return entry != null && entry.ZoomMultiplier > 0.01f ? entry.ZoomMultiplier : 1f;
+        }
         internal static bool GetExpandSearchToWeaponRoot() => ActiveScopeOverride != null ? ActiveScopeOverride.ExpandSearchToWeaponRoot : Settings.ExpandSearchToWeaponRoot.Value;
 
 
@@ -167,6 +174,7 @@ namespace PiPDisabler
                 Settings.CustomVignetteRadius.Value = entry.VignetteRadius;
                 Settings.CustomVignetteSoftness.Value = entry.VignetteSoftness;
                 Settings.CustomExpandSearchToWeaponRoot.Value = entry.ExpandSearchToWeaponRoot;
+                Settings.CustomZoomMultiplier.Value = entry.ZoomMultiplier > 0.01f ? entry.ZoomMultiplier : 1f;
                 PiPDisablerPlugin.DebugLogInfo(hasEntry
                     ? $"[CustomMeshSettings] Loaded saved settings for scope '{entry.ScopeKey}' into Custom config entries."
                     : $"[CustomMeshSettings] No saved settings for scope '{entry.ScopeKey}' — Custom config entries show the defaults.");
@@ -261,6 +269,7 @@ namespace PiPDisabler
             target.VignetteRadius = Settings.CustomVignetteRadius.Value;
             target.VignetteSoftness = Settings.CustomVignetteSoftness.Value;
             target.ExpandSearchToWeaponRoot = Settings.CustomExpandSearchToWeaponRoot.Value;
+            target.ZoomMultiplier = Settings.CustomZoomMultiplier.Value;
         }
 
         internal static bool IsSyncing => _syncingCustomConfig;
@@ -377,6 +386,7 @@ namespace PiPDisabler
             target.VignetteRadius = Settings.CustomVignetteRadius.Value;
             target.VignetteSoftness = Settings.CustomVignetteSoftness.Value;
             target.ExpandSearchToWeaponRoot = Settings.ExpandSearchToWeaponRoot.Value;
+            target.ZoomMultiplier = 1f;
         }
 
         private static void EnsureLoaded()
