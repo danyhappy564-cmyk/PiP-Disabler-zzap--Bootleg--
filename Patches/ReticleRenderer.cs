@@ -204,6 +204,7 @@ namespace PiPDisabler
                 _opticTransform = os.transform;
                 _scopeDataTransform = os.ScopeData != null ? os.ScopeData.transform : null;
                 _zeroLocalValid = false;
+                _zeroAlignEngaged = false;
 
                 EnsureMeshAndMaterial();
 
@@ -631,6 +632,12 @@ namespace PiPDisabler
         private static bool _zeroLocalValid;
         private const float ZeroSmoothingRate = 8f;
         private const float MaxZeroCorrectionDeg = 5f;
+        // Hysteresis: once aligned, keep aligning until the angle clearly exceeds the limit, so a
+        // value hovering at the limit can't flip the camera between the two axes every frame.
+        private const float ReleaseZeroCorrectionDeg = 8f;
+        private static bool _zeroAlignEngaged;
+        private static float _zeroDiagUntil;
+        private static int _zeroDiagLines;
 
         /// <summary>
         /// EFT zeroes a scope by tilting the optic (ScopePrefabCache.WeaponScopeAxis / ScopeData calibration),
@@ -658,7 +665,14 @@ namespace PiPDisabler
                 Vector3 opticForward = opticRot * Vector3.forward;
                 Vector3 zeroDir = _scopeDataTransform != null ? _scopeDataTransform.forward : opticForward;
                 float angle = Vector3.Angle(zeroDir, axis);
-                if (angle > MaxZeroCorrectionDeg)
+                bool engage = _zeroAlignEngaged ? angle <= ReleaseZeroCorrectionDeg : angle <= MaxZeroCorrectionDeg;
+                if (engage != _zeroAlignEngaged)
+                {
+                    _zeroAlignEngaged = engage;
+                    PiPDisablerPlugin.DebugLogInfo(
+                        $"[Reticle][Zero] scope-axis alignment {(engage ? "ON" : "OFF")} angle={angle:F3}° frame={Time.frameCount}");
+                }
+                if (!engage)
                     return opticRot;
 
                 Vector3 local = bone.InverseTransformDirection(zeroDir);
@@ -669,8 +683,26 @@ namespace PiPDisabler
                 }
                 else
                 {
+                    // Zero changing → log the next ~1.5 s frame by frame (Debug logging only).
+                    if (Settings.DebugLogging.Value && Vector3.Angle(local, _zeroLocal) > 0.02f)
+                    {
+                        if (Time.realtimeSinceStartup > _zeroDiagUntil) _zeroDiagLines = 0;
+                        _zeroDiagUntil = Time.realtimeSinceStartup + 1.5f;
+                    }
                     float k = 1f - Mathf.Exp(-ZeroSmoothingRate * Time.unscaledDeltaTime);
                     _zeroLocal = Vector3.Slerp(_zeroLocal, local, k);
+                }
+
+                if (Time.realtimeSinceStartup < _zeroDiagUntil && _zeroDiagLines < 400)
+                {
+                    _zeroDiagLines++;
+                    PiPDisablerPlugin.LogSource.LogInfo(
+                        $"[Reticle][Zero] f={Time.frameCount} angle={angle:F3} " +
+                        $"axisPitch={Mathf.Asin(Mathf.Clamp(axis.y, -1f, 1f)) * Mathf.Rad2Deg:F3} " +
+                        $"opticPitch={Mathf.Asin(Mathf.Clamp(opticForward.y, -1f, 1f)) * Mathf.Rad2Deg:F3} " +
+                        $"zeroPitch={Mathf.Asin(Mathf.Clamp(zeroDir.y, -1f, 1f)) * Mathf.Rad2Deg:F3} " +
+                        $"camPitchBefore={Mathf.Asin(Mathf.Clamp(_attachedCamera != null ? _attachedCamera.transform.forward.y : 0f, -1f, 1f)) * Mathf.Rad2Deg:F3} " +
+                        $"rawVsSmoothed={Vector3.Angle(local, _zeroLocal):F3}");
                 }
 
                 _zeroedForward = bone.TransformDirection(_zeroLocal).normalized;
