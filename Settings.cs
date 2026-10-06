@@ -64,6 +64,13 @@ namespace PiPDisabler
         public static ConfigEntry<float> CustomCutWidthMultiplier;
         public static ConfigEntry<bool> CustomCutManual;
         public static ConfigEntry<bool> AutoCutShape;
+        public static ConfigEntry<SettingsLanguage> Language;
+        public static ConfigEntry<bool> ReticleFollowsZoom;
+
+        public enum SettingsLanguage { Korean, English }
+
+        /// <summary>Pick the Korean or English text for user-facing messages.</summary>
+        internal static string L(string ko, string en) => Language != null && Language.Value == SettingsLanguage.English ? en : ko;
         public static ConfigEntry<KeyCode> RecutHoleKey;
         public static ConfigEntry<bool> PrecutHeldScope;
         public static ConfigEntry<KeyCode> SaveCustomMeshSurgerySettingsKey;
@@ -186,6 +193,16 @@ namespace PiPDisabler
                 new ConfigDescription(
                     "Multiplies the scaling of all scopes, useful if you feel like the scopes are too small or too large.",
                     new AcceptableValueRange<float>(0.25f, 3f),
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
+            ConfigEntries.Add(Language = config.Bind("General", "Settings Language", SettingsLanguage.Korean,
+                new ConfigDescription(
+                    "Language of the F12 settings and messages: Korean or English. Close and reopen F12 after changing.",
+                    null,
+                    new ConfigurationManagerAttributes { IsAdvanced = false, Order = 1000 })));
+            ConfigEntries.Add(ReticleFollowsZoom = config.Bind("General", "Reticle Follows Zoom Multiplier", true,
+                new ConfigDescription(
+                    "Scale the reticle with the per-scope zoom multiplier, so it keeps the same size relative to the lens and the target.",
+                    null,
                     new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(GlobalReticleScalingMultiplier = config.Bind("General", "Global Reticle Scaling Multiplier", 1f,
                 new ConfigDescription(
@@ -700,6 +717,7 @@ namespace PiPDisabler
             MigrateOldCutDefaults();
             RegisterVisualEffectLiveUpdates();
             RegisterReapplyOnChange();
+            Language.SettingChanged += (s, e) => SettingsKorean.Apply(ConfigEntries);
             SettingsKorean.Apply(ConfigEntries);
             RecalcOrder();
         }

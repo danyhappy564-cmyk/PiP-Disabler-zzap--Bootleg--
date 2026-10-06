@@ -52,6 +52,10 @@ namespace PiPDisabler
                 "켜면 1배율 스코프(도트 등)는 확대 없이 게임 설정의 시야(FOV) 그대로 보입니다." + Live),
             [K("General", "Global Scope Scaling Multiplier")] = new Text(CatBasic, "총 크기 (기본값)",
                 "스코프 볼 때 총이 화면에 보이는 크기. 클수록 총이 작아짐. 스코프별 '총 크기'를 정해둔 스코프에는 적용 안 됨." + Live),
+            [K("General", "Settings Language")] = new Text(CatBasic, "설정 언어 / Language",
+                "F12 설정과 안내 메시지 언어: Korean(한국어) / English(영어). 바꾼 뒤 F12 창을 닫았다가 다시 여세요.\nClose and reopen F12 after changing."),
+            [K("General", "Reticle Follows Zoom Multiplier")] = new Text(CatBasic, "조준선이 확대 배수 따라가기",
+                "켜면 스코프별 '확대 배수'를 바꿀 때 조준선 크기도 같은 비율로 바뀌어, 렌즈·목표물 대비 크기가 그대로 유지됩니다." + Live),
             [K("General", "Global Reticle Scaling Multiplier")] = new Text(CatBasic, "조준선 크기 (기본값)",
                 "조준선 크기. 클수록 커짐. 스코프별 '조준선 크기'를 정해둔 스코프에는 적용 안 됨." + Live),
             [K("General", "Baseline FOV")] = new Text(CatBasic, "확대 정도 (모든 스코프)",
@@ -292,6 +296,14 @@ namespace PiPDisabler
                     attributes.IsAdvanced = false;
                 if (Hidden.Contains(key) || entry.Definition.Section == "Global Mesh Surgery settings")
                     attributes.Browsable = false;
+                if (Settings.Language != null && Settings.Language.Value == Settings.SettingsLanguage.English)
+                {
+                    // English: the original names, sections and descriptions.
+                    attributes.DispName = null;
+                    attributes.Category = null;
+                    attributes.Description = null;
+                    continue;
+                }
                 attributes.DispName = text.Name;
                 attributes.Category = text.Category;
                 attributes.Description = text.Desc.TrimStart('\n');

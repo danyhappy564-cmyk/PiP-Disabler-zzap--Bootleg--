@@ -917,6 +917,18 @@ namespace PiPDisabler
             _fireReloadRotationRecoverStart = Quaternion.identity;
         }
 
+        /// <summary>
+        /// The per-scope zoom multiplier narrows the FOV by exactly that factor (tan-based), so the
+        /// lens and the target grow on screen by it; the reticle follows so it keeps its size relative
+        /// to them (2.8.0, "조준선이 확대 배수 따라가기").
+        /// </summary>
+        private static float ZoomReticleFactor()
+        {
+            if (Settings.ReticleFollowsZoom == null || !Settings.ReticleFollowsZoom.Value) return 1f;
+            float z = PerScopeMeshSurgerySettings.GetZoomMultiplier();
+            return z > 0.01f ? z : 1f;
+        }
+
         // ── Centered quad matrix ─────────────────────────────────────────────
 
         /// <summary>
@@ -977,6 +989,7 @@ namespace PiPDisabler
                     }
                 }
 
+                meshScale *= ZoomReticleFactor();
                 Vector3 position = _savedScopeReticle.Position;
                 Vector2 zeroOffset = GetZeroClipOffset(cam);
                 position.x += zeroOffset.x;
@@ -1007,7 +1020,8 @@ namespace PiPDisabler
         float angularSize = _baseScale / referenceLensDistance;
         float ndcSize = angularSize / referenceTanHalfFov;
         ndcSize *= PerScopeMeshSurgerySettings.GetGlobalReticleMultiplier();
-        ndcSize = Mathf.Clamp(ndcSize, 0.01f, 2f);
+        ndcSize *= ZoomReticleFactor();
+        ndcSize = Mathf.Clamp(ndcSize, 0.01f, 8f);
 
             Vector2 zeroClip = GetZeroClipOffset(cam);
             Vector3 pos = new Vector3(zeroClip.x, zeroClip.y, 0.5f);

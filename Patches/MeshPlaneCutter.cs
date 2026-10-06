@@ -505,7 +505,7 @@ namespace PiPDisabler
         /// </summary>
         public static bool CutMeshSightCone(Mesh mesh, Transform meshTransform,
             Vector3 lensCenterWorld, Vector3 lensNormalWorld, float eyeDistance,
-            float lensRadius, float widthScale)
+            float lensRadius, float widthScale, Matrix4x4? worldPre = null)
         {
             LastTris = 0; LastSightRemoved = 0; LastSightSplit = 0;
             LastRemovedCore = 0; LastRemovedCone = 0; LastKeptByFacing = 0;
@@ -514,7 +514,8 @@ namespace PiPDisabler
             Vector3 n = lensNormalWorld.normalized;
             Vector3 u = Vector3.Cross(n, Mathf.Abs(Vector3.Dot(n, Vector3.up)) > 0.9f ? Vector3.right : Vector3.up).normalized;
             Vector3 v = Vector3.Cross(n, u);
-            Matrix4x4 l2w = meshTransform.localToWorldMatrix;
+            // worldPre: extra world transform (predicted weapon stretch for a cut made ahead).
+            Matrix4x4 l2w = worldPre.HasValue ? worldPre.Value * meshTransform.localToWorldMatrix : meshTransform.localToWorldMatrix;
             float baseLimit = lensRadius * Mathf.Max(0.05f, widthScale);
 
             // Projected position on the lens plane (lens units = metres there) and depth along the axis.

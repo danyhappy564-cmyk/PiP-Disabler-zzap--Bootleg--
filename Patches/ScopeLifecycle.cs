@@ -571,6 +571,8 @@ namespace PiPDisabler
             int bucket = MeshSurgeryManager.GetAutoApexBucket();
             int rib = MeshSurgeryManager.RibBucket(MeshSurgeryManager.RenderRibcage());
             float now = Time.realtimeSinceStartup;
+            // A cut stored for this zoom (stretch) goes on screen at once — no waiting, no re-cut.
+            MeshSurgeryManager.TrySwitchVariant(rib);
             if (bucket != _autoCutBucketSeen || rib != _autoCutRibSeen)
             {
                 _autoCutBucketSeen = bucket;
@@ -600,12 +602,13 @@ namespace PiPDisabler
         {
             if (!_isScoped || _modBypassedForCurrentScope || _activeOptic == null || !PerScopeMeshSurgerySettings.IsAutoCut())
             {
-                PiPDisablerPlugin.Notify("PiP-Disabler: 자동 구멍 스코프로 조준한 채로 눌러 주세요");
+                PiPDisablerPlugin.Notify(Settings.L("PiP-Disabler: 자동 구멍 스코프로 조준한 채로 눌러 주세요", "PiP-Disabler: press while aiming a scope with the automatic hole"));
                 return;
             }
             bool ok = MeshSurgeryManager.StartAsyncRecut(_activeOptic, MeshSurgeryManager.GetAutoApexBucket(), "hotkey");
             _probeAfterRecutDone = false;
-            PiPDisablerPlugin.Notify(ok ? "PiP-Disabler: 구멍 다시 맞추는 중" : "PiP-Disabler: 구멍을 다시 자를 수 없음(로그 참고)");
+            PiPDisablerPlugin.Notify(ok ? Settings.L("PiP-Disabler: 구멍 다시 맞추는 중", "PiP-Disabler: redoing the hole")
+                                        : Settings.L("PiP-Disabler: 구멍을 다시 자를 수 없음(로그 참고)", "PiP-Disabler: could not redo the hole (see log)"));
         }
 
         private static float _nextPrecutCheck;
@@ -613,6 +616,7 @@ namespace PiPDisabler
         /// <summary>Not aiming: cut the held weapon's scope in the background (no hitch on the first aim).</summary>
         public static void TickPrecut()
         {
+            MeshSurgeryManager.CheckRaidChanged();
             if (_isScoped || !Settings.ModEnabled.Value || !Settings.PrecutHeldScope.Value) return;
             float now = Time.realtimeSinceStartup;
             if (now < _nextPrecutCheck) return;
@@ -656,29 +660,32 @@ namespace PiPDisabler
         public static string GetStatusText()
         {
             if (!Settings.ModEnabled.Value)
-                return "모드가 꺼져 있음";
+                return Settings.L("모드가 꺼져 있음", "Mod is off");
 
             var os = _activeOptic;
             if (!_isScoped || os == null)
             {
                 string last = PerScopeMeshSurgerySettings.LastScopeKey;
                 return string.IsNullOrEmpty(last)
-                    ? "조준 안 함 — 스코프로 조준하면 여기에 표시됩니다"
-                    : $"조준 안 함 — 마지막으로 조준한 스코프: {last}\n지금 아래 값을 바꾸면 이 스코프에 저장됩니다(화면엔 다시 조준하면 보임)";
+                    ? Settings.L("조준 안 함 — 스코프로 조준하면 여기에 표시됩니다", "Not aiming — aim with a scope to see it here")
+                    : Settings.L($"조준 안 함 — 마지막으로 조준한 스코프: {last}\n지금 아래 값을 바꾸면 이 스코프에 저장됩니다(화면엔 다시 조준하면 보임)",
+                                 $"Not aiming — last scope: {last}\nValues changed below are saved for this scope (visible when you aim again)");
             }
 
             string key = ResolveWhitelistScopeKey(os);
             string mode = _modBypassedForCurrentScope
-                ? "원래 방식(PiP)으로 보는 중 — 이 스코프엔 아래 설정이 적용되지 않음"
-                : "PiP-Disabler 적용 중";
+                ? Settings.L("원래 방식(PiP)으로 보는 중 — 이 스코프엔 아래 설정이 적용되지 않음", "Original PiP mode — the settings below do not apply to this scope")
+                : Settings.L("PiP-Disabler 적용 중", "PiP-Disabler active");
             string custom = PerScopeMeshSurgerySettings.IsUserEdited(key)
-                ? "내가 저장한 값 사용 중"
+                ? Settings.L("내가 저장한 값 사용 중", "using my saved values")
                 : PerScopeMeshSurgerySettings.GetActiveOverride() != null
-                    ? "모드 기본 내장값 사용 중 (바꾸면 내 값으로 저장)"
-                    : "없음 (전체 기본값 사용 중)";
+                    ? Settings.L("모드 기본 내장값 사용 중 (바꾸면 내 값으로 저장)", "using the bundled values (changing them saves my own)")
+                    : Settings.L("없음 (전체 기본값 사용 중)", "none (using the global defaults)");
             string hole = _modBypassedForCurrentScope ? "" :
-                $"\n{MeshSurgeryManager.GetAutoCutStatus()}\n마지막 검사: {LensProbe.LastSummary}";
-            return $"스코프: {key}\n상태: {mode}\n전용 설정: {custom}{hole}\n(크기·확대·조준선은 바로 보이고, 몸통 구멍은 F12 창을 닫으면 적용 · 창을 닫을 때 이 스코프에 저장)";
+                $"\n{MeshSurgeryManager.GetAutoCutStatus()}\n{Settings.L("마지막 검사", "Last check")}: {LensProbe.LastSummary}";
+            return Settings.L(
+                $"스코프: {key}\n상태: {mode}\n전용 설정: {custom}{hole}\n(크기·확대·조준선은 바로 보이고, 몸통 구멍은 F12 창을 닫으면 적용 · 창을 닫을 때 이 스코프에 저장)",
+                $"Scope: {key}\nState: {mode}\nScope settings: {custom}{hole}\n(size, zoom and reticle show at once; the hole is redone when F12 closes, and values are saved for this scope then)");
         }
 
         public static void ToggleActiveScopeWhitelistEntry()

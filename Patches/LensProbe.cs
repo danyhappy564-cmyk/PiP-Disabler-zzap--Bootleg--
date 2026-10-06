@@ -62,7 +62,8 @@ namespace PiPDisabler
         }
 
         /// <summary>Short result of the last probe for the F12 status line.</summary>
-        internal static string LastSummary { get; private set; } = "아직 없음 (8. 문제 확인용 → 자세한 기록 남기기를 켜면 검사)";
+        private static string _lastSummary;
+        internal static string LastSummary => _lastSummary ?? Settings.L("아직 없음 (8. 문제 확인용 → 자세한 기록 남기기를 켜면 검사)", "none yet (turn on detailed debug logging to check)");
 
         /// <summary>Run at the next render of the main camera, where the weapon is as on screen.</summary>
         public static void RunAtRender(OpticSight os, string reason)
@@ -199,7 +200,8 @@ namespace PiPDisabler
                 var sb2 = new StringBuilder();
                 foreach (var kv in damagedParts) sb2.Append($" '{kv.Key}'×{kv.Value}");
                 log.LogInfo($"[Probe] outside the lens ({checkedRays} rays that hit the weapon): cut away={damaged} (should be 0).{(sb2.Length > 0 ? " Parts:" + sb2 : "")}");
-                LastSummary = $"렌즈 안 막힘 {front + back}/17 · 렌즈 밖 잘림 {damaged}/{checkedRays} ({System.DateTime.Now:HH:mm:ss})";
+                _lastSummary = Settings.L($"렌즈 안 막힘 {front + back}/17 · 렌즈 밖 잘림 {damaged}/{checkedRays} ({System.DateTime.Now:HH:mm:ss})",
+                                          $"lens blocked {front + back}/17 · cut outside the lens {damaged}/{checkedRays} ({System.DateTime.Now:HH:mm:ss})");
                 log.LogInfo($"[Probe] took {probeSw.Elapsed.TotalMilliseconds:F0}ms (debug only; turn off detailed logging for normal play)");
             }
             catch (System.Exception ex)
