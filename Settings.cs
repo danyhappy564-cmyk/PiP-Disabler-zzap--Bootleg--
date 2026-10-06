@@ -64,6 +64,8 @@ namespace PiPDisabler
         public static ConfigEntry<float> CustomCutWidthMultiplier;
         public static ConfigEntry<bool> CustomCutManual;
         public static ConfigEntry<bool> AutoCutShape;
+        public static ConfigEntry<KeyCode> RecutHoleKey;
+        public static ConfigEntry<bool> PrecutHeldScope;
         public static ConfigEntry<KeyCode> SaveCustomMeshSurgerySettingsKey;
         public static ConfigEntry<KeyCode> DeleteCustomMeshSurgerySettingsKey;
         public static ConfigEntry<float> CustomPlaneOffsetMeters;
@@ -226,6 +228,16 @@ namespace PiPDisabler
             ConfigEntries.Add(AutoCutShape = config.Bind("General", "Automatic Cut Shape", true,
                 new ConfigDescription(
                     "Cut the hole automatically: removes exactly what the camera sees through the eyepiece lens, keeps what is seen around it. Off = use the hand-set hole values for every scope.",
+                    null,
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
+            ConfigEntries.Add(RecutHoleKey = config.Bind("General", "Re-cut Hole Key", KeyCode.Home,
+                new ConfigDescription(
+                    "While aiming: redo the automatic hole for the current view now (if something looks cut wrong).",
+                    null,
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
+            ConfigEntries.Add(PrecutHeldScope = config.Bind("General", "Pre-cut Held Scope", true,
+                new ConfigDescription(
+                    "Cut the hole for the scope on the weapon in your hands in the background before you aim, so the first aim has no hitch.",
                     null,
                     new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(FovAnimationDuration = config.Bind("General", "FOV Animation Duration", 0.35f,

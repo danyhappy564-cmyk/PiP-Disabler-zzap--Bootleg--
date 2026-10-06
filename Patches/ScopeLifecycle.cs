@@ -560,17 +560,16 @@ namespace PiPDisabler
             if (os == null || _meshSurgerySuppressedByReload || !PerScopeMeshSurgerySettings.IsAutoCut())
                 return;
 
-            MeshSurgeryManager.TickAsyncRecut();
-            // Probe (debug only, heavy): once after the first re-cut of each aim.
+            // Probe (debug only, heavy): once after the first re-cut of each aim, at render time.
             if (MeshSurgeryManager.ConsumeRecutFinished() && !_probeAfterRecutDone)
             {
                 _probeAfterRecutDone = true;
-                LensProbe.Run(os, "after re-cut");
+                LensProbe.RunAtRender(os, "after re-cut");
             }
 
             // The view is "settled" once camera distance and weapon stretch hold still for 0.6 s.
             int bucket = MeshSurgeryManager.GetAutoApexBucket();
-            int rib = MeshSurgeryManager.RibBucket(MeshSurgeryManager.CurrentRibcage());
+            int rib = MeshSurgeryManager.RibBucket(MeshSurgeryManager.RenderRibcage());
             float now = Time.realtimeSinceStartup;
             if (bucket != _autoCutBucketSeen || rib != _autoCutRibSeen)
             {
@@ -584,7 +583,7 @@ namespace PiPDisabler
             if (!_probeDone)
             {
                 _probeDone = true;
-                LensProbe.Run(os, $"view settled (camera bucket {bucket}, cut made with {MeshSurgeryManager.LastAutoApexBucketUsed})");
+                LensProbe.RunAtRender(os, $"view settled (camera bucket {bucket}, cut made with {MeshSurgeryManager.LastAutoApexBucketUsed})");
             }
             // Remember the settled distance so the next aim cuts right away (cache hit, no recut).
             MeshSurgeryManager.RememberSettledBucket(bucket);
@@ -594,6 +593,39 @@ namespace PiPDisabler
             if (now - _autoCutLastRecut < 0.3f) return;
             _autoCutLastRecut = now;
             MeshSurgeryManager.StartAsyncRecut(os, bucket, why);
+        }
+
+        /// <summary>Hotkey: redo the automatic hole for the current view now.</summary>
+        public static void RecutHoleNow()
+        {
+            if (!_isScoped || _modBypassedForCurrentScope || _activeOptic == null || !PerScopeMeshSurgerySettings.IsAutoCut())
+            {
+                PiPDisablerPlugin.Notify("PiP-Disabler: 자동 구멍 스코프로 조준한 채로 눌러 주세요");
+                return;
+            }
+            bool ok = MeshSurgeryManager.StartAsyncRecut(_activeOptic, MeshSurgeryManager.GetAutoApexBucket(), "hotkey");
+            _probeAfterRecutDone = false;
+            PiPDisablerPlugin.Notify(ok ? "PiP-Disabler: 구멍 다시 맞추는 중" : "PiP-Disabler: 구멍을 다시 자를 수 없음(로그 참고)");
+        }
+
+        private static float _nextPrecutCheck;
+
+        /// <summary>Not aiming: cut the held weapon's scope in the background (no hitch on the first aim).</summary>
+        public static void TickPrecut()
+        {
+            if (_isScoped || !Settings.ModEnabled.Value || !Settings.PrecutHeldScope.Value) return;
+            float now = Time.realtimeSinceStartup;
+            if (now < _nextPrecutCheck) return;
+            _nextPrecutCheck = now + 1f;
+            try
+            {
+                var os = TryGetCurrentScopeOpticFromPwa();
+                if (os == null || ShouldBypassForCurrentOptic(os)) return;
+                PerScopeMeshSurgerySettings.SetActiveScopeQuiet(ResolveWhitelistScopeKey(os));
+                try { MeshSurgeryManager.PrecutForOptic(os); }
+                finally { PerScopeMeshSurgerySettings.ClearActiveScope(); }
+            }
+            catch (Exception ex) { PiPDisablerPlugin.DebugLogInfo($"[ScopeLifecycle] pre-cut skipped: {ex.Message}"); }
         }
 
         private static int _autoCutRibSeen = int.MinValue;
@@ -644,7 +676,9 @@ namespace PiPDisabler
                 : PerScopeMeshSurgerySettings.GetActiveOverride() != null
                     ? "모드 기본 내장값 사용 중 (바꾸면 내 값으로 저장)"
                     : "없음 (전체 기본값 사용 중)";
-            return $"스코프: {key}\n상태: {mode}\n전용 설정: {custom}\n(크기·확대·조준선은 바로 보이고, 몸통 구멍은 F12 창을 닫으면 적용 · 창을 닫을 때 이 스코프에 저장)";
+            string hole = _modBypassedForCurrentScope ? "" :
+                $"\n{MeshSurgeryManager.GetAutoCutStatus()}\n마지막 검사: {LensProbe.LastSummary}";
+            return $"스코프: {key}\n상태: {mode}\n전용 설정: {custom}{hole}\n(크기·확대·조준선은 바로 보이고, 몸통 구멍은 F12 창을 닫으면 적용 · 창을 닫을 때 이 스코프에 저장)";
         }
 
         public static void ToggleActiveScopeWhitelistEntry()

@@ -229,6 +229,12 @@ namespace PiPDisabler
             }
         }
 
+        /// <summary>Sets the active scope key only (no F12 sync, no "last scope"): for background work.</summary>
+        internal static void SetActiveScopeQuiet(string scopeKey)
+        {
+            _activeScopeKey = string.IsNullOrWhiteSpace(scopeKey) ? null : scopeKey.Trim();
+        }
+
         internal static void ClearActiveScope()
         {
             _activeScopeKey = null;

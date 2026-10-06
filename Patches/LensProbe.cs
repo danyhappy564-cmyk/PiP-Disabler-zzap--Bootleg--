@@ -61,10 +61,21 @@ namespace PiPDisabler
             }
         }
 
+        /// <summary>Short result of the last probe for the F12 status line.</summary>
+        internal static string LastSummary { get; private set; } = "아직 없음 (8. 문제 확인용 → 자세한 기록 남기기를 켜면 검사)";
+
+        /// <summary>Run at the next render of the main camera, where the weapon is as on screen.</summary>
+        public static void RunAtRender(OpticSight os, string reason)
+        {
+            if (!Settings.DebugLogging.Value || os == null) return;
+            MeshSurgeryManager.RunAtRender(() => Run(os, reason + " [at render]"));
+        }
+
         public static void Run(OpticSight os, string reason)
         {
             if (!Settings.DebugLogging.Value || os == null) return;
             var log = PiPDisablerPlugin.LogSource;
+            var probeSw = System.Diagnostics.Stopwatch.StartNew();
 
             try
             {
@@ -188,6 +199,8 @@ namespace PiPDisabler
                 var sb2 = new StringBuilder();
                 foreach (var kv in damagedParts) sb2.Append($" '{kv.Key}'×{kv.Value}");
                 log.LogInfo($"[Probe] outside the lens ({checkedRays} rays that hit the weapon): cut away={damaged} (should be 0).{(sb2.Length > 0 ? " Parts:" + sb2 : "")}");
+                LastSummary = $"렌즈 안 막힘 {front + back}/17 · 렌즈 밖 잘림 {damaged}/{checkedRays} ({System.DateTime.Now:HH:mm:ss})";
+                log.LogInfo($"[Probe] took {probeSw.Elapsed.TotalMilliseconds:F0}ms (debug only; turn off detailed logging for normal play)");
             }
             catch (System.Exception ex)
             {

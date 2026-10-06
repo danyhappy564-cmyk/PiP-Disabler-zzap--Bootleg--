@@ -131,6 +131,10 @@ namespace PiPDisabler
             // The "hole": the mod cuts a tunnel through the scope body so you can see through it.
             [K("General", "Automatic Cut Shape")] = new Text(CatPerScope, "몸통 구멍 자동 계산 (모든 스코프)",
                 "켜면 구멍을 자동으로 뚫습니다: 지금 카메라 위치에서 렌즈 안으로 보이는 부분만 정확히 지우고(스코프 안쪽 벽·렌즈 뒤 덮개·앞쪽 총 부품 포함), 렌즈 밖으로 보이는 겉모양은 그대로 둡니다. 끄면 모든 스코프가 아래 수동 값을 씁니다." + Live),
+            [K("General", "Re-cut Hole Key")] = new Text(CatPerScope, "몸통 구멍 다시 맞추기 키",
+                "조준 중에 누르면 지금 화면 기준으로 구멍을 바로 다시 자릅니다(멈칫 없이 0.2~0.5초). 렌즈 둘레가 잘려 보이거나 렌즈 안에 몸통이 남아 보일 때 누르세요."),
+            [K("General", "Pre-cut Held Scope")] = new Text(CatPerScope, "들고 있는 총 스코프 미리 자르기",
+                "켜면 총을 들고 있을 때 그 스코프 구멍을 미리 조금씩 잘라 둬서, 첫 조준에도 멈칫이 없습니다." + Live),
             [K("Per scope settings", "Use Manual Cut Shape")] = new Text(CatPerScope, "이 스코프는 수동 구멍 사용",
                 "켜면 이 스코프만 자동 계산 대신 아래 '몸통 구멍 - …' 수동 값을 씁니다." + PerScopeCut),
             [K("Per scope settings", "Cut Width Multiplier")] = new Text(CatPerScope, "몸통 구멍 - 넓이",

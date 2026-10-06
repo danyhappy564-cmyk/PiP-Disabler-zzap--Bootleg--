@@ -17,7 +17,7 @@ namespace PiPDisabler
 
     public sealed class PiPDisablerPlugin : BaseUnityPlugin
     {
-        public const string PluginVersion = "2.7.8";
+        public const string PluginVersion = "2.7.9";
 
         public static ManualLogSource LogSource;
         internal static PiPDisablerPlugin Instance;
@@ -125,6 +125,10 @@ namespace PiPDisabler
                 DebugLogInfo($"[Global] Mod {(Settings.ModEnabled.Value ? "ENABLED" : "DISABLED")}");
             }
             if (!Settings.ModEnabled.Value) return;
+
+            if (Settings.RecutHoleKey.Value != KeyCode.None && InputProxy.GetKeyDown(Settings.RecutHoleKey.Value))
+                ScopeLifecycle.RecutHoleNow();
+            ScopeLifecycle.TickPrecut();
 
             if (Settings.ScopeWhitelistToggleEntryKey.Value != KeyCode.None && InputProxy.GetKeyDown(Settings.ScopeWhitelistToggleEntryKey.Value))
             {

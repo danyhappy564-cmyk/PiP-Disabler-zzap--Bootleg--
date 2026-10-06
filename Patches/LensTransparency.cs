@@ -76,6 +76,19 @@ namespace PiPDisabler
                 if (verts < 20) { fallback = Mathf.Max(fallback, r); continue; }
                 if (verts > bestVerts || (verts == bestVerts && r > best)) { best = r; bestVerts = verts; }
             }
+            if (best <= 0f && fallback <= 0f && scopeRoot != null)
+            {
+                // Lenses not hidden yet (pre-cut before aiming): read the backLens meshes directly.
+                foreach (var mf in scopeRoot.GetComponentsInChildren<MeshFilter>(true))
+                {
+                    if (mf == null || mf.sharedMesh == null || mf.sharedMesh.vertexCount == 0) continue;
+                    if (mf.name.IndexOf("backlens", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    float r = WorldRadius(mf.sharedMesh, mf.transform);
+                    int verts = mf.sharedMesh.vertexCount;
+                    if (verts < 20) { fallback = Mathf.Max(fallback, r); continue; }
+                    if (verts > bestVerts || (verts == bestVerts && r > best)) { best = r; bestVerts = verts; }
+                }
+            }
             return best > 0f ? best : fallback;
         }
 
