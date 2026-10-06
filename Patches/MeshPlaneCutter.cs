@@ -242,7 +242,8 @@ namespace PiPDisabler
             float plane3Position = 0.66f,
             float plane4Position = 1f,
             float epsilon = 1e-5f,
-            Vector3? eyeWorld = null)
+            Vector3? eyeWorld = null,
+            float coreRadius = 0f)
         {
             if (mesh == null || nearRadius <= 0 || length <= 0) return false;
             // eyeWorld set (automatic hole): inside the volume only faces that face the eye are
@@ -252,6 +253,11 @@ namespace PiPDisabler
             bool facingTest = eyeWorld.HasValue;
             Vector3 eyeL = facingTest ? meshTransform.InverseTransformPoint(eyeWorld.Value) : Vector3.zero;
             bool flipWinding = facingTest && meshTransform.localToWorldMatrix.determinant < 0f;
+            // Core = the straight lens-sized tube in front of the eyepiece. Everything there goes,
+            // whichever way it faces: inner parts of some scopes are two-sided or wound the other
+            // way, and keeping "away-facing" ones there blacked out the whole lens (Razor, 2.7.1).
+            float avgScaleCore = (Mathf.Abs(meshTransform.lossyScale.x) + Mathf.Abs(meshTransform.lossyScale.y) + Mathf.Abs(meshTransform.lossyScale.z)) / 3f;
+            float localCoreR = coreRadius > 0f ? (avgScaleCore > 0.001f ? coreRadius / avgScaleCore : coreRadius) : 0f;
             if (farRadius <= 0) farRadius = nearRadius;
             Vector3 cL = meshTransform.InverseTransformPoint(centerWorld);
             Vector3 aL = meshTransform.InverseTransformDirection(axisWorld).normalized;
@@ -315,6 +321,16 @@ namespace PiPDisabler
                 return perpDist <= radiusAtDepth + epsilon;
             }
 
+            bool IsInCore(Vector3 v)
+            {
+                if (localCoreR <= 0f) return false;
+                Vector3 diff = v - cL;
+                float axialDist = Vector3.Dot(diff, aL);
+                if (axialDist < 0f || axialDist > -_cStart + _cLen + epsilon) return false; // in front of the lens only
+                Vector3 projected = axialDist * aL;
+                return (diff - projected).magnitude <= localCoreR;
+            }
+
             int AddVertexFromOld(int oldIndex)
             {
                 if (keptMap.TryGetValue(oldIndex, out int ni))
@@ -344,7 +360,8 @@ namespace PiPDisabler
                     else
                         keepTri = !in0 && !in1 && !in2;
 
-                    if (!keepTri && facingTest)
+                    if (!keepTri && facingTest
+                        && !IsInCore(verts[i0]) && !IsInCore(verts[i1]) && !IsInCore(verts[i2]))
                     {
                         Vector3 v0 = verts[i0], v1 = verts[i1], v2 = verts[i2];
                         Vector3 n = Vector3.Cross(v1 - v0, v2 - v0);

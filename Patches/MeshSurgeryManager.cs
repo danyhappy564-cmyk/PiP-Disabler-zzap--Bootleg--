@@ -333,6 +333,7 @@ namespace PiPDisabler
             float autoR1 = 0f, autoR2 = 0f, autoR3 = 0f, autoR4 = 0f, autoP2 = 0f, autoP3 = 0f;
             float autoStart = 0f, autoLen = 0f, autoPreserve = 0f;
             Vector3 autoEye = Vector3.zero;
+            float autoCore = 0f;
             if (PerScopeMeshSurgerySettings.IsAutoCut())
             {
                 float lensR = LensTransparency.GetEyepieceLensRadius(scopeRoot);
@@ -359,6 +360,7 @@ namespace PiPDisabler
                     autoR3 = lensR * (1.12f + w * RampDepth / eye);
                     autoR4 = lensR * (1.12f + w * front / eye);                   // straight cone from there
                     autoEye = planePoint - planeNormal * eye;
+                    autoCore = rNear;
                     autoCut = true;
                     PiPDisablerPlugin.LogSource.LogInfo(
                         $"[MeshSurgery] Auto hole: lens r={lensR * 1000f:F1}mm, camera {eye * 1000f:F0}mm behind it, " +
@@ -425,7 +427,7 @@ namespace PiPDisabler
                             keepInside: false, midRadius: autoR2, midPosition: autoP2,
                             nearPreserveDepth: autoPreserve,
                             plane3Radius: autoR3, plane3Position: autoP3, plane4Position: 1f,
-                            eyeWorld: autoEye);
+                            eyeWorld: autoEye, coreRadius: autoCore);
                     }
                     else if (isCylinder)
                     {
