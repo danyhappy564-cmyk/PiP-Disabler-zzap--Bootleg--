@@ -326,45 +326,28 @@ namespace PiPDisabler
                 : MeshPlaneCutter.KeepSide.Negative;
 
 
-            // Automatic hole: a tube the size of the eyepiece lens that widens only slightly towards
-            // the front — the shape the hand-tuned presets converge to (median of 82: ~lens radius
-            // near the eyepiece, slow flare after). Removes the scope's inside, keeps its outside.
+            // Automatic hole (2.7.6): remove exactly what the real camera sees through the eyepiece
+            // lens — every face whose projection from the camera lands inside the lens circle, in
+            // front of or behind the lens, whichever way it faces. What lands outside is what is
+            // seen around the lens, so the scope's outside stays as it is on screen.
             bool autoCut = false;
-            float autoR1 = 0f, autoR2 = 0f, autoR3 = 0f, autoR4 = 0f, autoP2 = 0f, autoP3 = 0f;
-            float autoStart = 0f, autoLen = 0f, autoPreserve = 0f;
-            Vector3 autoEye = Vector3.zero;
-            float autoCore = 0f;
+            float autoEyeDist = 0f, autoLensR = 0f, autoWidth = 1f;
             if (PerScopeMeshSurgerySettings.IsAutoCut())
             {
                 float lensR = LensTransparency.GetEyepieceLensRadius(scopeRoot);
                 if (lensR > 0.003f && lensR < 0.05f)
                 {
-                    // The lens on screen is the eyepiece seen from the REAL camera. What shows through
-                    // it is the cone from that camera through the eyepiece rim, so that cone (and only
-                    // the faces in it that face the camera) is removed. Its apex distance changes with
-                    // the weapon scale/zoom; ScopeLifecycle re-fits it once the view has settled.
+                    // Camera distance changes with weapon scale/zoom; ScopeLifecycle re-fits once the
+                    // view has settled.
                     RememberAutoPlane(scopeRoot, planePoint, planeNormal);
                     LastAutoApexBucketUsed = GetAutoApexBucket();
-                    float eye = DefaultApexDistance * Mathf.Pow(ApexBucketStep, LastAutoApexBucketUsed);
-                    float w = PerScopeMeshSurgerySettings.GetCutWidthMultiplierRaw();
-                    float rNear = lensR * 0.97f; // keep the eyepiece rim facing the eye (2.7.0 cut it → NF eyepiece vanished)
-                    const float RampDepth = 0.02f;
-                    autoStart = PerScopeMeshSurgerySettings.GetCutStartOffset();
-                    autoLen = Mathf.Max(PerScopeMeshSurgerySettings.GetCutLength(), autoStart + RampDepth + 0.05f);
-                    autoPreserve = PerScopeMeshSurgerySettings.GetNearPreserveDepth();
-                    float front = autoLen - autoStart;
-                    autoR1 = rNear;
-                    autoP2 = Mathf.Clamp01(autoStart / autoLen);                 // lens plane
-                    autoR2 = rNear;
-                    autoP3 = Mathf.Clamp01((autoStart + RampDepth) / autoLen);    // 2 cm in front
-                    autoR3 = lensR * (1.12f + w * RampDepth / eye);
-                    autoR4 = lensR * (1.12f + w * front / eye);                   // straight cone from there
-                    autoEye = planePoint - planeNormal * eye;
-                    autoCore = rNear;
+                    autoEyeDist = DefaultApexDistance * Mathf.Pow(ApexBucketStep, LastAutoApexBucketUsed);
+                    autoLensR = lensR;
+                    autoWidth = PerScopeMeshSurgerySettings.GetCutWidthMultiplierRaw();
                     autoCut = true;
                     PiPDisablerPlugin.LogSource.LogInfo(
-                        $"[MeshSurgery] Auto hole: lens r={lensR * 1000f:F1}mm, camera {eye * 1000f:F0}mm behind it, " +
-                        $"width={w:F2} → r {rNear * 1000f:F1}mm at lens, {autoR3 * 1000f:F1}mm at +2cm, {lensR * (1.12f + w * 0.3f / eye) * 1000f:F0}mm at +30cm");
+                        $"[MeshSurgery] Auto hole (line of sight): lens r={lensR * 1000f:F1}mm, camera {autoEyeDist * 1000f:F0}mm behind it, " +
+                        $"width={autoWidth:F2} → removes what projects inside {lensR * autoWidth * 970f:F1}mm (eye side) / {lensR * autoWidth * 1050f:F1}mm (2cm+ past the lens) on the lens plane");
                 }
                 else
                 {
@@ -422,12 +405,8 @@ namespace PiPDisabler
                     bool ok;
                     if (isCylinder && autoCut)
                     {
-                        ok = MeshPlaneCutter.CutMeshFrustum(readable, mf.transform,
-                            planePoint, planeNormal, autoR1, autoR4, autoStart, autoLen,
-                            keepInside: false, midRadius: autoR2, midPosition: autoP2,
-                            nearPreserveDepth: autoPreserve,
-                            plane3Radius: autoR3, plane3Position: autoP3, plane4Position: 1f,
-                            eyeWorld: autoEye, coreRadius: autoCore);
+                        ok = MeshPlaneCutter.CutMeshSightCone(readable, mf.transform,
+                            planePoint, planeNormal, autoEyeDist, autoLensR, autoWidth);
                     }
                     else if (isCylinder)
                     {
@@ -468,7 +447,7 @@ namespace PiPDisabler
                         var rend = mf.GetComponent<Renderer>();
                         PiPDisablerPlugin.DebugLogInfo(
                             $"[MeshSurgery] Cut '{originalAsset.name}' (go='{mf.name}', {LensProbe.DescribeMaterial(rend)}, det={(mf.transform.localToWorldMatrix.determinant < 0f ? "-" : "+")}): " +
-                            $"{vertsBefore} → {readable.vertexCount} verts; tris {MeshPlaneCutter.LastTris}: removed core={MeshPlaneCutter.LastRemovedCore} cone={MeshPlaneCutter.LastRemovedCone}, kept-facing-away={MeshPlaneCutter.LastKeptByFacing}");
+                            $"{vertsBefore} → {readable.vertexCount} verts; tris {MeshPlaneCutter.LastTris}: removed {MeshPlaneCutter.LastSightRemoved} in the line of sight, split {MeshPlaneCutter.LastSightSplit} on the lens edge{(ok ? "" : " (whole part was in the line of sight)")}");
                     }
                     else
                     {
@@ -807,7 +786,7 @@ namespace PiPDisabler
 
         // ── Automatic hole: apex = the real camera ──
         private const float DefaultApexDistance = 0.12f;
-        private const float ApexBucketStep = 1.1f;
+        private const float ApexBucketStep = 1.03f;
         private static Transform _autoScopeRoot;
         private static Vector3 _autoPlaneLocal, _autoNormalLocal;
 
@@ -818,7 +797,7 @@ namespace PiPDisabler
             _autoNormalLocal = scopeRoot.InverseTransformDirection(planeNormal);
         }
 
-        /// <summary>Distance from the main camera to the eyepiece along the bore, in 10% buckets.</summary>
+        /// <summary>Distance from the main camera to the eyepiece along the bore, in 3% buckets.</summary>
         internal static int GetAutoApexBucket()
         {
             float e = DefaultApexDistance;

@@ -225,7 +225,7 @@ namespace PiPDisabler
                     new ConfigurationManagerAttributes { IsAdvanced = true })));
             ConfigEntries.Add(AutoCutShape = config.Bind("General", "Automatic Cut Shape", true,
                 new ConfigDescription(
-                    "Cut the hole through the scope body automatically from the eyepiece lens size (keeps the scope's outside). Off = use the hand-set hole values for every scope.",
+                    "Cut the hole automatically: removes exactly what the camera sees through the eyepiece lens, keeps what is seen around it. Off = use the hand-set hole values for every scope.",
                     null,
                     new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(FovAnimationDuration = config.Bind("General", "FOV Animation Duration", 0.35f,
@@ -422,7 +422,7 @@ namespace PiPDisabler
                     new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(CustomCutWidthMultiplier = config.Bind("Per scope settings", "Cut Width Multiplier", 1f,
                 new ConfigDescription(
-                    "Scales the middle and front radii of the hole cut through the scope body (1 = as set, smaller = less of the scope's outside is cut).",
+                    "Automatic hole: size of the cut relative to the eyepiece lens (1 = exactly the lens). Manual hole: scales the middle and front radii.",
                     new AcceptableValueRange<float>(0.2f, 2f),
                     new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(CustomCutManual = config.Bind("Per scope settings", "Use Manual Cut Shape", false,

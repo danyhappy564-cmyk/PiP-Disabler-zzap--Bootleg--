@@ -473,5 +473,222 @@ namespace PiPDisabler
                 radius, radius, 0f, 999f, keepInside,
                 midRadius: 0f, midPosition: 0.5f, nearPreserveDepth: 0f, epsilon: epsilon);
         }
+        // ── Automatic hole (2.7.6): remove what the camera sees through the lens ──
+        // Diagnostics for the last CutMeshSightCone call.
+        public static int LastSightRemoved, LastSightSplit;
+
+        private struct SVert
+        {
+            public Vector3 P, N; public Vector4 T; public Vector2 UV;
+            public static SVert Mid(in SVert a, in SVert b) => new SVert
+            {
+                P = (a.P + b.P) * 0.5f,
+                N = ((a.N + b.N) * 0.5f).normalized,
+                T = (a.T + b.T) * 0.5f,
+                UV = (a.UV + b.UV) * 0.5f
+            };
+        }
+
+        /// <summary>
+        /// Removes every part of the mesh that the camera would see through the eyepiece lens.
+        ///
+        /// Each point is projected from the camera (on the lens axis, <paramref name="eyeDistance"/>
+        /// behind the lens) onto the lens plane. Whatever lands inside the lens circle sits in the
+        /// line of sight through the lens and is removed, whichever way it faces and whether it is
+        /// in front of or behind the lens (inner walls, two-sided outer skin, eyepiece glass baked
+        /// into the body). Whatever lands outside is exactly what is seen around the lens and is
+        /// kept, so the scope's outside does not change on screen. Triangles crossing the circle are
+        /// split so the edge follows the circle instead of cutting whole big faces.
+        /// Limit: 0.97 × lens radius up to the lens plane (keeps the eyepiece bore and rim), easing
+        /// to 1.05 × by 2 cm past it (that strip is hidden behind the bore anyway; absorbs small
+        /// camera sway), all × <paramref name="widthScale"/>.
+        /// </summary>
+        public static bool CutMeshSightCone(Mesh mesh, Transform meshTransform,
+            Vector3 lensCenterWorld, Vector3 lensNormalWorld, float eyeDistance,
+            float lensRadius, float widthScale)
+        {
+            LastTris = 0; LastSightRemoved = 0; LastSightSplit = 0;
+            LastRemovedCore = 0; LastRemovedCone = 0; LastKeptByFacing = 0;
+            if (mesh == null || eyeDistance <= 0.02f || lensRadius <= 0f) return false;
+
+            Vector3 n = lensNormalWorld.normalized;
+            Vector3 u = Vector3.Cross(n, Mathf.Abs(Vector3.Dot(n, Vector3.up)) > 0.9f ? Vector3.right : Vector3.up).normalized;
+            Vector3 v = Vector3.Cross(n, u);
+            Matrix4x4 l2w = meshTransform.localToWorldMatrix;
+            float baseLimit = lensRadius * Mathf.Max(0.05f, widthScale);
+
+            // Projected position on the lens plane (lens units = metres there) and depth along the axis.
+            bool Project(Vector3 local, out Vector2 p, out float x)
+            {
+                Vector3 d = l2w.MultiplyPoint3x4(local) - lensCenterWorld;
+                x = Vector3.Dot(d, n);
+                float denom = eyeDistance + x;
+                if (denom < 0.02f) { p = default; return false; } // at/behind the camera: never in sight
+                float s = eyeDistance / denom;
+                p = new Vector2(Vector3.Dot(d, u) * s, Vector3.Dot(d, v) * s);
+                return true;
+            }
+            float LimitAt(float x)
+            {
+                if (x <= 0f) return baseLimit * 0.97f;
+                return baseLimit * Mathf.Lerp(0.97f, 1.05f, Mathf.Clamp01(x / 0.02f));
+            }
+
+            var verts = mesh.vertices;
+            var norms = mesh.normals;
+            var tangs = mesh.tangents;
+            var uvs = mesh.uv;
+            bool hasN = norms != null && norms.Length == verts.Length;
+            bool hasT = tangs != null && tangs.Length == verts.Length;
+            bool hasUV = uvs != null && uvs.Length == verts.Length;
+
+            int vc = verts.Length;
+            var pr = new Vector2[vc];
+            var px = new float[vc];
+            var pok = new bool[vc];
+            for (int i = 0; i < vc; i++) pok[i] = Project(verts[i], out pr[i], out px[i]);
+
+            var outV = new List<Vector3>(vc);
+            var outN = hasN ? new List<Vector3>(vc) : null;
+            var outT = hasT ? new List<Vector4>(vc) : null;
+            var outUV = hasUV ? new List<Vector2>(vc) : null;
+            var keptMap = new Dictionary<int, int>(vc);
+
+            int AddOld(int i)
+            {
+                if (keptMap.TryGetValue(i, out int ni)) return ni;
+                ni = outV.Count;
+                outV.Add(verts[i]);
+                if (hasN) outN.Add(norms[i]);
+                if (hasT) outT.Add(tangs[i]);
+                if (hasUV) outUV.Add(uvs[i]);
+                keptMap[i] = ni;
+                return ni;
+            }
+            int AddNew(in SVert s)
+            {
+                int ni = outV.Count;
+                outV.Add(s.P);
+                if (hasN) outN.Add(s.N);
+                if (hasT) outT.Add(s.T);
+                if (hasUV) outUV.Add(s.UV);
+                return ni;
+            }
+            SVert Get(int i) => new SVert
+            {
+                P = verts[i],
+                N = hasN ? norms[i] : Vector3.zero,
+                T = hasT ? tangs[i] : Vector4.zero,
+                UV = hasUV ? uvs[i] : Vector2.zero
+            };
+
+            // Smallest distance from the lens centre to the projected triangle (0 if it covers it).
+            float DistToOrigin(Vector2 a, Vector2 b, Vector2 c)
+            {
+                float d1 = Cross2(b - a, -a), d2 = Cross2(c - b, -b), d3 = Cross2(a - c, -c);
+                bool neg = d1 < 0 || d2 < 0 || d3 < 0, pos = d1 > 0 || d2 > 0 || d3 > 0;
+                if (!(neg && pos)) return 0f;
+                return Mathf.Min(SegDist(a, b), Mathf.Min(SegDist(b, c), SegDist(c, a)));
+            }
+
+            int subCount = mesh.subMeshCount;
+            var outTris = new List<int>[subCount];
+            for (int s = 0; s < subCount; s++)
+            {
+                int[] tris = mesh.GetTriangles(s);
+                var list = outTris[s] = new List<int>(tris.Length);
+                for (int t = 0; t + 2 < tris.Length; t += 3)
+                {
+                    LastTris++;
+                    int i0 = tris[t], i1 = tris[t + 1], i2 = tris[t + 2];
+                    if (!pok[i0] || !pok[i1] || !pok[i2])
+                    {
+                        list.Add(AddOld(i0)); list.Add(AddOld(i1)); list.Add(AddOld(i2));
+                        continue;
+                    }
+                    bool in0 = pr[i0].magnitude < LimitAt(px[i0]);
+                    bool in1 = pr[i1].magnitude < LimitAt(px[i1]);
+                    bool in2 = pr[i2].magnitude < LimitAt(px[i2]);
+                    if (in0 && in1 && in2) { LastSightRemoved++; continue; }
+                    // A projected triangle is exactly the triangle of the projected corners (central
+                    // projection keeps lines straight), so this test is exact.
+                    if (!in0 && !in1 && !in2 && DistToOrigin(pr[i0], pr[i1], pr[i2]) >= Mathf.Max(LimitAt(px[i0]), Mathf.Max(LimitAt(px[i1]), LimitAt(px[i2]))))
+                    {
+                        list.Add(AddOld(i0)); list.Add(AddOld(i1)); list.Add(AddOld(i2));
+                        continue;
+                    }
+
+                    // Crosses the lens circle: split it, then keep/remove the pieces.
+                    LastSightSplit++;
+                    float size = Mathf.Max((pr[i0] - pr[i1]).magnitude,
+                        Mathf.Max((pr[i1] - pr[i2]).magnitude, (pr[i2] - pr[i0]).magnitude));
+                    int depth = size < 0.08f * lensRadius ? 0 : size < 0.25f * lensRadius ? 2 : size < 0.7f * lensRadius ? 3 : 4;
+                    if (depth == 0)
+                    {
+                        Vector2 c = (pr[i0] + pr[i1] + pr[i2]) / 3f;
+                        if (c.magnitude < LimitAt((px[i0] + px[i1] + px[i2]) / 3f)) { LastSightRemoved++; continue; }
+                        list.Add(AddOld(i0)); list.Add(AddOld(i1)); list.Add(AddOld(i2));
+                        continue;
+                    }
+                    Split(Get(i0), Get(i1), Get(i2), depth, list);
+                }
+            }
+
+            void Split(in SVert a, in SVert b, in SVert c, int depth, List<int> list)
+            {
+                if (depth <= 0)
+                {
+                    Vector3 centre = (a.P + b.P + c.P) / 3f;
+                    if (Project(centre, out Vector2 pc, out float xc) && pc.magnitude < LimitAt(xc)) return;
+                    list.Add(AddNew(a)); list.Add(AddNew(b)); list.Add(AddNew(c));
+                    return;
+                }
+                // A piece wholly outside (or wholly inside) needs no further splitting.
+                if (Project(a.P, out var pa, out var xa) && Project(b.P, out var pb, out var xb) && Project(c.P, out var pcc, out var xcc))
+                {
+                    bool ia = pa.magnitude < LimitAt(xa), ib = pb.magnitude < LimitAt(xb), ic = pcc.magnitude < LimitAt(xcc);
+                    if (ia && ib && ic) return;
+                    if (!ia && !ib && !ic && DistToOrigin(pa, pb, pcc) >= Mathf.Max(LimitAt(xa), Mathf.Max(LimitAt(xb), LimitAt(xcc))))
+                    {
+                        list.Add(AddNew(a)); list.Add(AddNew(b)); list.Add(AddNew(c));
+                        return;
+                    }
+                }
+                SVert ab = SVert.Mid(a, b), bc = SVert.Mid(b, c), ca = SVert.Mid(c, a);
+                Split(a, ab, ca, depth - 1, list);
+                Split(ab, b, bc, depth - 1, list);
+                Split(ca, bc, c, depth - 1, list);
+                Split(ab, bc, ca, depth - 1, list);
+            }
+
+            long kept = 0;
+            for (int s = 0; s < subCount; s++) kept += outTris[s].Count;
+            LastRemovedCore = LastSightRemoved;
+            if (kept == 0) return false;
+
+            mesh.Clear();
+            if (outV.Count > 65535) mesh.indexFormat = IndexFormat.UInt32;
+            mesh.SetVertices(outV);
+            if (hasN) mesh.SetNormals(outN);
+            if (hasT) mesh.SetTangents(outT);
+            if (hasUV) mesh.SetUVs(0, outUV);
+            mesh.subMeshCount = subCount;
+            for (int s = 0; s < subCount; s++)
+                mesh.SetTriangles(outTris[s], s, true);
+            mesh.RecalculateBounds();
+            if (!hasN) mesh.RecalculateNormals();
+            return true;
+        }
+
+        private static float Cross2(Vector2 a, Vector2 b) => a.x * b.y - a.y * b.x;
+
+        private static float SegDist(Vector2 a, Vector2 b)
+        {
+            Vector2 ab = b - a;
+            float l2 = ab.sqrMagnitude;
+            float t = l2 > 1e-12f ? Mathf.Clamp01(-Vector2.Dot(a, ab) / l2) : 0f;
+            return (a + ab * t).magnitude;
+        }
+
     }
 }

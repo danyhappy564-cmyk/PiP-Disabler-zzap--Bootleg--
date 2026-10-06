@@ -130,11 +130,11 @@ namespace PiPDisabler
 
             // The "hole": the mod cuts a tunnel through the scope body so you can see through it.
             [K("General", "Automatic Cut Shape")] = new Text(CatPerScope, "몸통 구멍 자동 계산 (모든 스코프)",
-                "켜면 렌즈 크기를 재서 구멍을 자동으로 뚫습니다: 렌즈 크기만큼의 통로가 앞쪽으로 조금씩만 넓어지는 모양이라 스코프 안쪽은 지워지고 겉모양은 남습니다. 끄면 모든 스코프가 아래 수동 값을 씁니다." + Live),
+                "켜면 구멍을 자동으로 뚫습니다: 지금 카메라 위치에서 렌즈 안으로 보이는 부분만 정확히 지우고(스코프 안쪽 벽·렌즈 뒤 덮개·앞쪽 총 부품 포함), 렌즈 밖으로 보이는 겉모양은 그대로 둡니다. 끄면 모든 스코프가 아래 수동 값을 씁니다." + Live),
             [K("Per scope settings", "Use Manual Cut Shape")] = new Text(CatPerScope, "이 스코프는 수동 구멍 사용",
                 "켜면 이 스코프만 자동 계산 대신 아래 '몸통 구멍 - …' 수동 값을 씁니다." + PerScopeCut),
             [K("Per scope settings", "Cut Width Multiplier")] = new Text(CatPerScope, "몸통 구멍 - 넓이",
-                "자동 구멍: 1 = 렌즈로 보이는 범위만 정확히(권장). 낮추면 덜 지워서 안쪽이 보일 수 있고, 높이면 더 지움. 수동 구멍: 스코프 앞쪽 구멍 크기 배수." + PerScopeCut),
+                "자동 구멍: 1 = 렌즈 크기만큼 정확히(권장). 렌즈 가장자리에 몸통이 살짝 비치면 1.05~1.1, 렌즈 둘레 겉모양이 깎여 보이면 0.95. 수동 구멍: 스코프 앞쪽 구멍 크기 배수." + PerScopeCut),
             [K("Per scope settings", "CutLength")] = new Text(CatPerScope, "몸통 구멍 - 깊이",
                 "이 모드는 스코프 몸통에 구멍을 뚫어 그 사이로 봅니다. 렌즈 안에 몸통 안쪽(검은 원통)이 보이면 늘리세요." + PerScopeCut),
             [K("Per scope settings", "Plane1Radius")] = new Text(CatPerScope, "몸통 구멍 - 눈 쪽 크기",
