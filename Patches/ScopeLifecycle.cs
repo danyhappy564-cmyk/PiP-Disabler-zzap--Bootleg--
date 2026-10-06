@@ -578,6 +578,8 @@ namespace PiPDisabler
             }
             if (_autoCutBucketApplied == int.MinValue)
                 _autoCutBucketApplied = MeshSurgeryManager.LastAutoApexBucketUsed; // what the enter cut used
+            // Remember the settled distance so the next aim cuts right away (cache hit, no recut).
+            MeshSurgeryManager.RememberSettledBucket(bucket);
             if (_autoCutBucketApplied != int.MinValue && System.Math.Abs(bucket - _autoCutBucketApplied) < 2)
                 return;
 

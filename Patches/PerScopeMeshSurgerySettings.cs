@@ -53,6 +53,7 @@ namespace PiPDisabler
         // Last scope aimed with: F12 edits made after leaving the scope still belong to it.
         private static string _lastScopeKey;
         internal static string LastScopeKey => _lastScopeKey;
+        internal static string ActiveScopeKey => _activeScopeKey;
         private static bool _syncingCustomConfig;
 
         // Bundled defaults ship in the plugin folder and are replaced by every mod update/reinstall.

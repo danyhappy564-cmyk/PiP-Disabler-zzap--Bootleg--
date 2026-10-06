@@ -500,8 +500,8 @@ namespace PiPDisabler
         /// kept, so the scope's outside does not change on screen. Triangles crossing the circle are
         /// split so the edge follows the circle instead of cutting whole big faces.
         /// Limit: 0.97 × lens radius up to the lens plane (keeps the eyepiece bore and rim), easing
-        /// to 1.05 × by 2 cm past it (that strip is hidden behind the bore anyway; absorbs small
-        /// camera sway), all × <paramref name="widthScale"/>.
+        /// to 1.0 × by 2 cm past it, all × <paramref name="widthScale"/>. (2.7.6 used 1.05: on the
+        /// Razor that cut parts of the offset red-dot mount visible around the thin eyepiece.)
         /// </summary>
         public static bool CutMeshSightCone(Mesh mesh, Transform meshTransform,
             Vector3 lensCenterWorld, Vector3 lensNormalWorld, float eyeDistance,
@@ -531,7 +531,7 @@ namespace PiPDisabler
             float LimitAt(float x)
             {
                 if (x <= 0f) return baseLimit * 0.97f;
-                return baseLimit * Mathf.Lerp(0.97f, 1.05f, Mathf.Clamp01(x / 0.02f));
+                return baseLimit * Mathf.Lerp(0.97f, 1.0f, Mathf.Clamp01(x / 0.02f));
             }
 
             var verts = mesh.vertices;

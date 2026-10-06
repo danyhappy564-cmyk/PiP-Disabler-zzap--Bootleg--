@@ -340,14 +340,14 @@ namespace PiPDisabler
                     // Camera distance changes with weapon scale/zoom; ScopeLifecycle re-fits once the
                     // view has settled.
                     RememberAutoPlane(scopeRoot, planePoint, planeNormal);
-                    LastAutoApexBucketUsed = GetAutoApexBucket();
+                    LastAutoApexBucketUsed = GetAutoBucketForCut();
                     autoEyeDist = DefaultApexDistance * Mathf.Pow(ApexBucketStep, LastAutoApexBucketUsed);
                     autoLensR = lensR;
                     autoWidth = PerScopeMeshSurgerySettings.GetCutWidthMultiplierRaw();
                     autoCut = true;
                     PiPDisablerPlugin.LogSource.LogInfo(
-                        $"[MeshSurgery] Auto hole (line of sight): lens r={lensR * 1000f:F1}mm, camera {autoEyeDist * 1000f:F0}mm behind it, " +
-                        $"width={autoWidth:F2} → removes what projects inside {lensR * autoWidth * 970f:F1}mm (eye side) / {lensR * autoWidth * 1050f:F1}mm (2cm+ past the lens) on the lens plane");
+                        $"[MeshSurgery] Auto hole (line of sight): lens r={lensR * 1000f:F1}mm, camera {autoEyeDist * 1000f:F0}mm behind it ({(HasSettledBucket() ? "remembered settled distance" : "live, not settled yet")}), " +
+                        $"width={autoWidth:F2} → removes what projects inside {lensR * autoWidth * 970f:F1}mm (eye side) / {lensR * autoWidth * 1000f:F1}mm (2cm+ past the lens) on the lens plane");
                 }
                 else
                 {
@@ -818,6 +818,70 @@ namespace PiPDisabler
 
         internal static void ForgetAutoPlane() => _autoScopeRoot = null;
 
+        // ── Settled camera distance per scope (2.7.7) ──
+        // The first cut happens while the aim animation is still moving the camera, so its distance
+        // is wrong and a full recut followed ~0.6 s later (a visible hitch on every aim). The
+        // settled distance is the same every time for a scope, so it is remembered (and saved) and
+        // used for the first cut; the cached cut is then reused and no recut is needed.
+        private static readonly Dictionary<string, int> _settledBucket = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        private static bool _settledLoaded;
+        private static string SettledFilePath => System.IO.Path.Combine(BepInEx.Paths.ConfigPath, "PiP-Disabler.camera-distance.txt");
+
+        private static void LoadSettled()
+        {
+            if (_settledLoaded) return;
+            _settledLoaded = true;
+            try
+            {
+                if (!System.IO.File.Exists(SettledFilePath)) return;
+                foreach (var line in System.IO.File.ReadAllLines(SettledFilePath))
+                {
+                    int eq = line.LastIndexOf('=');
+                    if (eq <= 0) continue;
+                    if (int.TryParse(line.Substring(eq + 1).Trim(), out int b))
+                        _settledBucket[line.Substring(0, eq).Trim()] = b;
+                }
+                PiPDisablerPlugin.DebugLogInfo($"[MeshSurgery] Loaded settled camera distance for {_settledBucket.Count} scopes");
+            }
+            catch (Exception ex) { PiPDisablerPlugin.DebugLogInfo($"[MeshSurgery] Camera distance file not read: {ex.Message}"); }
+        }
+
+        /// <summary>Camera-distance bucket to cut with: the remembered settled one, else the live one.</summary>
+        internal static int GetAutoBucketForCut()
+        {
+            LoadSettled();
+            string key = PerScopeMeshSurgerySettings.ActiveScopeKey;
+            if (!string.IsNullOrEmpty(key) && _settledBucket.TryGetValue(key, out int b)) return b;
+            return GetAutoApexBucket();
+        }
+
+        internal static bool HasSettledBucket()
+        {
+            LoadSettled();
+            string key = PerScopeMeshSurgerySettings.ActiveScopeKey;
+            return !string.IsNullOrEmpty(key) && _settledBucket.ContainsKey(key);
+        }
+
+        internal static void RememberSettledBucket(int bucket)
+        {
+            LoadSettled();
+            string key = PerScopeMeshSurgerySettings.ActiveScopeKey;
+            if (string.IsNullOrEmpty(key)) return;
+            if (_settledBucket.TryGetValue(key, out int old) && old == bucket) return;
+            _settledBucket[key] = bucket;
+            try
+            {
+                var lines = new List<string>(_settledBucket.Count);
+                foreach (var kv in _settledBucket) lines.Add(kv.Key + "=" + kv.Value);
+                string tmp = SettledFilePath + ".tmp";
+                System.IO.File.WriteAllLines(tmp, lines.ToArray());
+                if (System.IO.File.Exists(SettledFilePath)) System.IO.File.Delete(SettledFilePath);
+                System.IO.File.Move(tmp, SettledFilePath);
+            }
+            catch (Exception ex) { PiPDisablerPlugin.DebugLogInfo($"[MeshSurgery] Camera distance file not saved: {ex.Message}"); }
+            PiPDisablerPlugin.DebugLogInfo($"[MeshSurgery] Remembered settled camera distance for '{key}': {DefaultApexDistance * Mathf.Pow(ApexBucketStep, bucket) * 1000f:F0}mm (bucket {bucket})");
+        }
+
         internal static bool TryGetAutoPlaneWorld(out Transform scopeRoot, out Vector3 point, out Vector3 normal)
         {
             scopeRoot = _autoScopeRoot;
@@ -835,7 +899,7 @@ namespace PiPDisabler
         {
             return string.Join("|", new[]
             {
-                PerScopeMeshSurgerySettings.IsAutoCut() ? "Auto" + GetAutoApexBucket() : "Cylinder",
+                PerScopeMeshSurgerySettings.IsAutoCut() ? "Auto" + GetAutoBucketForCut() : "Cylinder",
                 PerScopeMeshSurgerySettings.GetCutWidthMultiplierRaw().ToString("F3"),
                 PerScopeMeshSurgerySettings.GetPlaneOffsetMeters().ToString("F4"),
                 PerScopeMeshSurgerySettings.GetPlane1OffsetMeters().ToString("F4"),
