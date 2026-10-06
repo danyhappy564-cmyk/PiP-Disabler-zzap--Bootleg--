@@ -553,7 +553,6 @@ namespace PiPDisabler
         private const float AutoCutSettleTime = 0.6f;
         private static int _autoCutBucketSeen = int.MinValue;
         private static float _autoCutBucketSince;
-        private static int _autoCutBucketApplied = int.MinValue;
 
         private static void TickAutoCutZoom()
         {
@@ -561,11 +560,22 @@ namespace PiPDisabler
             if (os == null || _meshSurgerySuppressedByReload || !PerScopeMeshSurgerySettings.IsAutoCut())
                 return;
 
+            MeshSurgeryManager.TickAsyncRecut();
+            // Probe (debug only, heavy): once after the first re-cut of each aim.
+            if (MeshSurgeryManager.ConsumeRecutFinished() && !_probeAfterRecutDone)
+            {
+                _probeAfterRecutDone = true;
+                LensProbe.Run(os, "after re-cut");
+            }
+
+            // The view is "settled" once camera distance and weapon stretch hold still for 0.6 s.
             int bucket = MeshSurgeryManager.GetAutoApexBucket();
+            int rib = MeshSurgeryManager.RibBucket(MeshSurgeryManager.CurrentRibcage());
             float now = Time.realtimeSinceStartup;
-            if (bucket != _autoCutBucketSeen)
+            if (bucket != _autoCutBucketSeen || rib != _autoCutRibSeen)
             {
                 _autoCutBucketSeen = bucket;
+                _autoCutRibSeen = rib;
                 _autoCutBucketSince = now;
                 return;
             }
@@ -576,27 +586,19 @@ namespace PiPDisabler
                 _probeDone = true;
                 LensProbe.Run(os, $"view settled (camera bucket {bucket}, cut made with {MeshSurgeryManager.LastAutoApexBucketUsed})");
             }
-            if (_autoCutBucketApplied == int.MinValue)
-                _autoCutBucketApplied = MeshSurgeryManager.LastAutoApexBucketUsed; // what the enter cut used
             // Remember the settled distance so the next aim cuts right away (cache hit, no recut).
             MeshSurgeryManager.RememberSettledBucket(bucket);
-            if (_autoCutBucketApplied != int.MinValue && System.Math.Abs(bucket - _autoCutBucketApplied) < 2)
-                return;
 
-            _autoCutBucketApplied = bucket;
-            try
-            {
-                MeshSurgeryManager.RestoreForScope(os.transform);
-                MeshSurgeryManager.ApplyForOptic(os);
-                LensTransparency.HideAllLensSurfaces(os);
-                PiPDisablerPlugin.DebugLogInfo($"[ScopeLifecycle] Auto hole re-fitted (camera distance bucket {bucket}).");
-                LensProbe.Run(os, "after re-fit");
-            }
-            catch (Exception ex)
-            {
-                PiPDisablerPlugin.DebugLogInfo($"[ScopeLifecycle] Auto hole re-fit failed: {ex.Message}");
-            }
+            if (MeshSurgeryManager.RecutRunning) return;
+            if (!MeshSurgeryManager.AutoCutIsStale(bucket, rib, out string why)) return;
+            if (now - _autoCutLastRecut < 0.3f) return;
+            _autoCutLastRecut = now;
+            MeshSurgeryManager.StartAsyncRecut(os, bucket, why);
         }
+
+        private static int _autoCutRibSeen = int.MinValue;
+        private static bool _probeAfterRecutDone;
+        private static float _autoCutLastRecut;
 
         private static bool _probeDone;
 
@@ -604,7 +606,9 @@ namespace PiPDisabler
         {
             _probeDone = false;
             _autoCutBucketSeen = int.MinValue;
-            _autoCutBucketApplied = int.MinValue;
+            _autoCutRibSeen = int.MinValue;
+            MeshSurgeryManager.CancelAsyncRecut("scope exit");
+            _probeAfterRecutDone = false;
         }
 
         /// <summary>Exit and re-enter the current scope so changed settings take effect now.</summary>

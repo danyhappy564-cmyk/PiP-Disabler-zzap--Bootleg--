@@ -28,6 +28,9 @@ namespace PiPDisabler
             public bool Dirty = true;
             public string SettingsSignature;
             public string ProfileKey;
+            // Automatic hole: the camera distance / weapon stretch the cut meshes were made for.
+            public int CutEyeBucket = int.MinValue;
+            public int CutRibBucket = int.MinValue;
         }
 
         private sealed class RaidWeaponCache
@@ -286,6 +289,7 @@ namespace PiPDisabler
         {
             if (cache == null || os == null || scopeRoot == null) return;
             if (!activeMode) activeMode = os.transform;
+            CancelAsyncRecut("full rebuild");
             _lastAttemptOptic = os.name;
             _lastAttemptScopeRoot = scopeRoot.name;
             _lastAttemptActiveMode = activeMode.name;
@@ -347,7 +351,7 @@ namespace PiPDisabler
                     autoCut = true;
                     PiPDisablerPlugin.LogSource.LogInfo(
                         $"[MeshSurgery] Auto hole (line of sight): lens r={lensR * 1000f:F1}mm, camera {autoEyeDist * 1000f:F0}mm behind it ({(HasSettledBucket() ? "remembered settled distance" : "live, not settled yet")}), " +
-                        $"width={autoWidth:F2} → removes what projects inside {lensR * autoWidth * 970f:F1}mm (eye side) / {lensR * autoWidth * 1000f:F1}mm (2cm+ past the lens) on the lens plane");
+                        $"weapon stretch={CurrentRibcage():F3}, width={autoWidth:F2} → removes what projects inside {lensR * autoWidth * 970f:F1}mm (eye side) / {lensR * autoWidth * 1000f:F1}mm (2cm+ past the lens) on the lens plane");
                 }
                 else
                 {
@@ -478,6 +482,8 @@ namespace PiPDisabler
 
             cache.Built = true;
             cache.Dirty = false;
+            cache.CutEyeBucket = autoCut ? LastAutoApexBucketUsed : int.MinValue;
+            cache.CutRibBucket = autoCut ? RibBucket(CurrentRibcage()) : int.MinValue;
             cache.SettingsSignature = BuildCutSettingsSignature();
             _lastCutAttemptFrame = Time.frameCount;
             _lastAttemptEntries = cache.Entries.Count;
@@ -560,6 +566,7 @@ namespace PiPDisabler
 
         private static void DestroyCurrentWeaponCache()
         {
+            _recut = null;
             foreach (var weaponCache in _raidCaches.Values)
             {
                 if (weaponCache == null) continue;
@@ -817,6 +824,182 @@ namespace PiPDisabler
         }
 
         internal static void ForgetAutoPlane() => _autoScopeRoot = null;
+
+        // ── Weapon stretch (2.7.8) ──
+        // EFT stretches the whole weapon along its length with the zoom (FirstPersonStrategy sets
+        // Ribcage / HandsHierarchy localScale = (1, 1, RibcageScaleCurrent)). A cut made at one
+        // stretch is wrong at another: parts in front of the eyepiece move in/out of the lens on
+        // screen, so the cut either leaves bits inside the lens or bites into turrets/mounts
+        // visible around it. The cut therefore remembers the stretch it was made for and is redone
+        // (spread over frames, see TickAsyncRecut) when the settled stretch changes.
+        private const float RibBucketStep = 1.03f;
+
+        internal static float CurrentRibcage()
+        {
+            try
+            {
+                var p = Helpers.GetLocalPlayer();
+                if (p != null && p.RibcageScaleCurrent > 0.05f) return p.RibcageScaleCurrent;
+            }
+            catch { }
+            return 1f;
+        }
+
+        internal static int RibBucket(float s) => Mathf.RoundToInt(Mathf.Log(Mathf.Max(0.05f, s)) / Mathf.Log(RibBucketStep));
+
+        /// <summary>True when the current automatic cut was made for a different camera distance or stretch.</summary>
+        internal static bool AutoCutIsStale(int eyeBucket, int ribBucket, out string why)
+        {
+            why = null;
+            var cache = _currentWeaponCache;
+            if (cache == null || !cache.Built || cache.CutEyeBucket == int.MinValue) return false;
+            if (System.Math.Abs(eyeBucket - cache.CutEyeBucket) >= 2)
+                why = $"camera distance {cache.CutEyeBucket}->{eyeBucket}";
+            else if (ribBucket != cache.CutRibBucket)
+                why = $"weapon stretch {Mathf.Pow(RibBucketStep, cache.CutRibBucket):F2}->{Mathf.Pow(RibBucketStep, ribBucket):F2}";
+            return why != null;
+        }
+
+        private sealed class RecutJob
+        {
+            public CutProfileCache Cache;
+            public Transform ScopeRoot;
+            public Vector3 PlaneLocal, NormalLocal;
+            public float Eye, LensR, Width;
+            public int EyeBucket, RibBucket, Next, Removed, Split, Done;
+            public string Reason;
+            public float Started;
+            public double Ms;
+        }
+        private static RecutJob _recut;
+        internal static bool RecutRunning => _recut != null;
+        private static bool _recutFinished;
+
+        /// <summary>Was a background re-cut completed since the last call?</summary>
+        internal static bool ConsumeRecutFinished()
+        {
+            bool f = _recutFinished;
+            _recutFinished = false;
+            return f;
+        }
+
+        /// <summary>Redo the automatic cut for the current view, a few meshes per frame (no hitch).</summary>
+        internal static bool StartAsyncRecut(OpticSight os, int eyeBucket, string reason)
+        {
+            var cache = _currentWeaponCache;
+            if (os == null || cache == null || !cache.Built || cache.Entries.Count == 0) return false;
+            if (!PerScopeMeshSurgerySettings.IsAutoCut()) return false;
+            var scopeRoot = ScopeHierarchy.FindScopeRoot(os.transform);
+            if (!scopeRoot) return false;
+            var activeMode = ResolveActiveMode(os, scopeRoot);
+            if (!activeMode) activeMode = os.transform;
+            if (!ScopeHierarchy.TryGetPlane(os, scopeRoot, activeMode, out var planePoint, out var planeNormal, out _))
+                return false;
+            planePoint += planeNormal * PerScopeMeshSurgerySettings.GetPlane1OffsetMeters();
+            float lensR = LensTransparency.GetEyepieceLensRadius(scopeRoot);
+            if (lensR <= 0.003f || lensR >= 0.05f) return false;
+
+            CancelAsyncRecut("restarted");
+            RememberAutoPlane(scopeRoot, planePoint, planeNormal);
+            _recut = new RecutJob
+            {
+                Cache = cache,
+                ScopeRoot = scopeRoot,
+                PlaneLocal = scopeRoot.InverseTransformPoint(planePoint),
+                NormalLocal = scopeRoot.InverseTransformDirection(planeNormal),
+                Eye = DefaultApexDistance * Mathf.Pow(ApexBucketStep, eyeBucket),
+                LensR = lensR,
+                Width = PerScopeMeshSurgerySettings.GetCutWidthMultiplierRaw(),
+                EyeBucket = eyeBucket,
+                RibBucket = RibBucket(CurrentRibcage()),
+                Reason = reason,
+                Started = Time.realtimeSinceStartup
+            };
+            PiPDisablerPlugin.DebugLogInfo(
+                $"[MeshSurgery] Re-cut started in the background ({reason}): camera {_recut.Eye * 1000f:F0}mm, weapon stretch {CurrentRibcage():F3}, {cache.Entries.Count} parts");
+            return true;
+        }
+
+        internal static void CancelAsyncRecut(string why)
+        {
+            if (_recut == null) return;
+            PiPDisablerPlugin.DebugLogInfo($"[MeshSurgery] Background re-cut stopped ({why}) after {_recut.Done}/{_recut.Cache.Entries.Count} parts");
+            // Parts not redone yet still hold the old cut; make the next settle check redo them.
+            _recut.Cache.CutRibBucket = int.MinValue;
+            _recut = null;
+        }
+
+        /// <summary>Per frame while scoped: re-cut parts within a small time budget.</summary>
+        internal static void TickAsyncRecut()
+        {
+            var job = _recut;
+            if (job == null) return;
+            if (!ReferenceEquals(job.Cache, _currentWeaponCache) || job.ScopeRoot == null)
+            {
+                CancelAsyncRecut("weapon changed");
+                return;
+            }
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Vector3 planePoint = job.ScopeRoot.TransformPoint(job.PlaneLocal);
+            Vector3 planeNormal = job.ScopeRoot.TransformDirection(job.NormalLocal).normalized;
+            var entries = job.Cache.Entries;
+            while (job.Next < entries.Count)
+            {
+                var entry = entries[job.Next++];
+                if (entry == null || entry.Filter == null || entry.OriginalMesh == null) continue;
+                Mesh readable = null;
+                try
+                {
+                    readable = MeshPlaneCutter.MakeReadableMeshCopy(entry.OriginalMesh);
+                    if (readable != null)
+                    {
+                        bool ok = MeshPlaneCutter.CutMeshSightCone(readable, entry.Filter.transform,
+                            planePoint, planeNormal, job.Eye, job.LensR, job.Width);
+                        if (!ok) { readable.Clear(); readable.name = entry.OriginalMesh.name + "_CUT_EMPTY"; }
+                        else readable.name = entry.OriginalMesh.name + "_CUT";
+                        job.Removed += MeshPlaneCutter.LastSightRemoved;
+                        job.Split += MeshPlaneCutter.LastSightSplit;
+
+                        var old = entry.CutMesh;
+                        entry.CutMesh = readable;
+                        if (entry.Applied) entry.Filter.sharedMesh = readable;
+                        readable = null;
+                        if (old != null) UnityEngine.Object.Destroy(old);
+                        job.Done++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    PiPDisablerPlugin.DebugLogInfo($"[MeshSurgery] Re-cut failed on '{entry.OriginalMesh.name}': {ex.Message}");
+                }
+                finally
+                {
+                    if (readable != null) UnityEngine.Object.Destroy(readable);
+                }
+                if (sw.Elapsed.TotalMilliseconds > 3.0) break; // keep frames smooth
+            }
+            job.Ms += sw.Elapsed.TotalMilliseconds;
+            if (job.Next < entries.Count) return;
+
+            job.Cache.CutEyeBucket = job.EyeBucket;
+            job.Cache.CutRibBucket = job.RibBucket;
+            LastAutoApexBucketUsed = job.EyeBucket;
+            _recut = null;
+            _recutFinished = true;
+            PiPDisablerPlugin.DebugLogInfo(
+                $"[MeshSurgery] Background re-cut done ({job.Reason}): {job.Done} parts, removed {job.Removed} triangles in the line of sight, split {job.Split}, " +
+                $"{job.Ms:F0}ms of work over {(Time.realtimeSinceStartup - job.Started) * 1000f:F0}ms");
+        }
+
+        /// <summary>Original (uncut) mesh of a part, if the current cut replaced it.</summary>
+        internal static Mesh GetOriginalMesh(MeshFilter mf)
+        {
+            var cache = _currentWeaponCache;
+            if (cache == null || mf == null) return null;
+            foreach (var e in cache.Entries)
+                if (e != null && e.Filter == mf) return e.OriginalMesh;
+            return null;
+        }
 
         // ── Settled camera distance per scope (2.7.7) ──
         // The first cut happens while the aim animation is still moving the camera, so its distance

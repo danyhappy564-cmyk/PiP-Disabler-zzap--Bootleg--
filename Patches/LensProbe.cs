@@ -92,35 +92,30 @@ namespace PiPDisabler
                 log.LogInfo($"[Probe] camera: near={cam.nearClipPlane * 1000f:F1}mm far={cam.farClipPlane:F0}m fov={cam.fieldOfView:F2}° " +
                             $"camera→lens={camToLens * 1000f:F1}mm (off-axis {Vector3.ProjectOnPlane(lensP - camPos, lensN).magnitude * 1000f:F1}mm) " +
                             $"lens r={lensR * 1000f:F1}mm = {lensPx:F0}px on screen at ({vp0.x:F3},{vp0.y:F3}) " +
-                            $"ribcage={(player != null ? player.RibcageScaleCurrent : 0f):F3} zoomMult={PerScopeMeshSurgerySettings.GetZoomMultiplier():F2} width={PerScopeMeshSurgerySettings.GetCutWidthMultiplierRaw():F2}");
+                            $"weapon stretch(ribcage)={(player != null ? player.RibcageScaleCurrent : 0f):F3} zoomMult={PerScopeMeshSurgerySettings.GetZoomMultiplier():F2} width={PerScopeMeshSurgerySettings.GetCutWidthMultiplierRaw():F2}");
 
                 log.LogInfo($"[Probe] hidden lens surfaces (position from the eyepiece lens plane):{LensTransparency.DescribeHidden(lensP, lensN)}");
 
-                // Gather meshes as they are now (cut meshes are readable; originals get a temp copy).
+                // Gather meshes as they are now (cut meshes are readable; originals get a temp copy),
+                // and the same parts before cutting (to spot cuts that show outside the lens).
                 var meshes = new List<MeshData>(64);
+                var originals = new List<MeshData>(64);
                 var temps = new List<Mesh>();
                 foreach (var mf in weaponRoot.GetComponentsInChildren<MeshFilter>(false))
                 {
                     var r = mf.GetComponent<Renderer>();
                     if (mf.sharedMesh == null || r == null || !r.enabled || r.forceRenderingOff) continue;
                     if (LodLock.IsNotDrawn(r)) continue; // higher LOD level not drawn while scoped
-                    if (mf.sharedMesh.vertexCount == 0) continue;
-                    Mesh m = mf.sharedMesh;
-                    if (!m.isReadable)
-                    {
-                        m = MeshPlaneCutter.MakeReadableMeshCopy(m);
-                        if (m == null) continue;
-                        temps.Add(m);
-                    }
-                    var local = m.vertices;
                     var mtx = mf.transform.localToWorldMatrix;
-                    var world = new Vector3[local.Length];
-                    for (int i = 0; i < local.Length; i++) world[i] = mtx.MultiplyPoint3x4(local[i]);
-                    meshes.Add(new MeshData
+                    if (mf.sharedMesh.vertexCount > 0 && TryWorldMesh(mf.sharedMesh, mtx, temps, out var wv, out var wt))
+                        meshes.Add(new MeshData { Go = mf.name, Mesh = mf.sharedMesh.name, Material = DescribeMaterial(r), V = wv, T = wt, Flip = mtx.determinant < 0f });
+                    var orig = MeshSurgeryManager.GetOriginalMesh(mf);
+                    if (orig == null || orig == mf.sharedMesh)
                     {
-                        Go = mf.name, Mesh = mf.sharedMesh.name, Material = DescribeMaterial(r),
-                        V = world, T = m.triangles, Flip = mtx.determinant < 0f
-                    });
+                        if (meshes.Count > 0 && meshes[meshes.Count - 1].Go == mf.name) originals.Add(meshes[meshes.Count - 1]); // not cut: same data
+                    }
+                    else if (orig.vertexCount > 0 && TryWorldMesh(orig, mtx, temps, out var ov, out var ot))
+                        originals.Add(new MeshData { Go = mf.name, Mesh = orig.name, Material = "", V = ov, T = ot, Flip = mtx.determinant < 0f });
                 }
                 foreach (var t in temps) Object.Destroy(t);
 
@@ -164,11 +159,57 @@ namespace PiPDisabler
                 var sb = new StringBuilder();
                 foreach (var kv in summary) sb.Append($" '{kv.Key}'×{kv.Value}");
                 log.LogInfo($"[Probe] inside the lens (17 rays): clear={none}, blocked by front faces={front}, by back faces={back} (back faces only show if two-sided).{(sb.Length > 0 ? " Blockers:" + sb : "")}");
+
+                // Outside the lens: anything the uncut weapon shows there must still be there.
+                float[] outer = { 1.03f, 1.08f, 1.15f, 1.25f, 1.4f };
+                int checkedRays = 0, damaged = 0, shown = 0;
+                var damagedParts = new Dictionary<string, int>();
+                foreach (float f in outer)
+                {
+                    for (int k = 0; k < 12; k++)
+                    {
+                        float a = k * Mathf.PI * 2f / 12f;
+                        Vector3 target = lensP + (u * Mathf.Cos(a) + v * Mathf.Sin(a)) * (f * lensR);
+                        Vector3 dir = (target - camPos).normalized;
+                        Vector3 o = camPos + dir * cam.nearClipPlane;
+                        Hit hO = CastRay(originals, o, dir, lensP, lensN);
+                        if (!hO.Any) continue;
+                        checkedRays++;
+                        Hit hC = CastRay(meshes, o, dir, lensP, lensN);
+                        if (hC.Any && hC.Dist <= hO.Dist + 0.002f) continue;
+                        damaged++;
+                        var od = originals[hO.MeshIndex];
+                        damagedParts[od.Go] = (damagedParts.TryGetValue(od.Go, out int c) ? c : 0) + 1;
+                        if (shown++ < 10)
+                            log.LogInfo($"[Probe] OUTSIDE CUT {f * 100f:F0}%@{k * 30}°: '{od.Go}' ({hO.Axial * 1000f:+0;-0}mm from lens plane) was visible here and is now cut away" +
+                                        (hC.Any ? $", now shows '{meshes[hC.MeshIndex].Go}' behind it" : ", now shows the background"));
+                    }
+                }
+                var sb2 = new StringBuilder();
+                foreach (var kv in damagedParts) sb2.Append($" '{kv.Key}'×{kv.Value}");
+                log.LogInfo($"[Probe] outside the lens ({checkedRays} rays that hit the weapon): cut away={damaged} (should be 0).{(sb2.Length > 0 ? " Parts:" + sb2 : "")}");
             }
             catch (System.Exception ex)
             {
                 log.LogInfo($"[Probe] failed: {ex.Message}");
             }
+        }
+
+        private static bool TryWorldMesh(Mesh mesh, Matrix4x4 mtx, List<Mesh> temps, out Vector3[] world, out int[] tris)
+        {
+            world = null; tris = null;
+            Mesh m = mesh;
+            if (!m.isReadable)
+            {
+                m = MeshPlaneCutter.MakeReadableMeshCopy(m);
+                if (m == null) return false;
+                temps.Add(m);
+            }
+            var local = m.vertices;
+            world = new Vector3[local.Length];
+            for (int i = 0; i < local.Length; i++) world[i] = mtx.MultiplyPoint3x4(local[i]);
+            tris = m.triangles;
+            return true;
         }
 
         private static Hit CastRay(List<MeshData> meshes, Vector3 o, Vector3 d, Vector3 lensP, Vector3 lensN)
