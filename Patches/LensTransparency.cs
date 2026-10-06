@@ -149,6 +149,9 @@ namespace PiPDisabler
 
             PiPDisablerPlugin.DebugLogInfo(
                 $"[LensTransparency] Destroyed geometry on {killed} lens surfaces (searchRoot='{searchRoot.name}')");
+
+            // Keep the weapon on LOD0 so a low-poly LOD1 body can't cap the eyepiece hole.
+            LodLock.Apply(os);
         }
 
         /// <summary>
@@ -157,6 +160,7 @@ namespace PiPDisabler
         /// </summary>
         public static void EnsureHidden(Renderer excludeRenderer = null)
         {
+            LodLock.Enforce();
             var emptyMesh = GetEmptyMesh();
             for (int i = 0; i < _hidden.Count; i++)
             {
@@ -190,6 +194,7 @@ namespace PiPDisabler
         /// </summary>
         public static void RestoreAll()
         {
+            LodLock.Restore();
             if (_hidden.Count == 0) return;
 
             for (int i = 0; i < _hidden.Count; i++)

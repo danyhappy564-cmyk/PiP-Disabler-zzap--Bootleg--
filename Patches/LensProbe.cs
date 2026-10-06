@@ -103,6 +103,7 @@ namespace PiPDisabler
                 {
                     var r = mf.GetComponent<Renderer>();
                     if (mf.sharedMesh == null || r == null || !r.enabled || r.forceRenderingOff) continue;
+                    if (LodLock.IsNotDrawn(r)) continue; // higher LOD level not drawn while scoped
                     if (mf.sharedMesh.vertexCount == 0) continue;
                     Mesh m = mf.sharedMesh;
                     if (!m.isReadable)
@@ -150,8 +151,14 @@ namespace PiPDisabler
                             string key = $"{md.Go}/{md.Mesh}";
                             summary[key] = (summary.TryGetValue(key, out int c) ? c : 0) + 1;
                         }
+                        // What is right behind it (helps when the first hit is a thin shell).
+                        Vector3 o2 = camPos + dir * (cam.nearClipPlane + h.Dist + 0.0005f);
+                        Hit h2 = CastRay(meshes, o2, dir, lensP, lensN);
+                        string behind = h2.Any
+                            ? $" | behind: '{meshes[h2.MeshIndex].Go}' {(h2.Front ? "FRONT" : "back")} {h2.Axial * 1000f:+0;-0}mm"
+                            : " | behind: clear";
                         log.LogInfo($"[Probe] {where,-9}: hit '{md.Go}' mesh='{md.Mesh}' {(h.Front ? "FRONT face" : "back face")} " +
-                                    $"at {h.Dist * 1000f:F0}mm from camera, {h.Axial * 1000f:+0;-0}mm from lens plane, {md.Material}");
+                                    $"at {(cam.nearClipPlane + h.Dist) * 1000f:F0}mm from camera, {h.Axial * 1000f:+0;-0}mm from lens plane, {md.Material}{behind}");
                     }
                 }
                 var sb = new StringBuilder();
