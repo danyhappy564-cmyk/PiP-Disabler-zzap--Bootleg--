@@ -571,6 +571,11 @@ namespace PiPDisabler
             }
             if (now - _autoCutBucketSince < AutoCutSettleTime || SettingsApplyGate.IsSettingsWindowOpen)
                 return;
+            if (!_probeDone)
+            {
+                _probeDone = true;
+                LensProbe.Run(os, $"view settled (camera bucket {bucket}, cut made with {MeshSurgeryManager.LastAutoApexBucketUsed})");
+            }
             if (_autoCutBucketApplied == int.MinValue)
                 _autoCutBucketApplied = MeshSurgeryManager.LastAutoApexBucketUsed; // what the enter cut used
             if (_autoCutBucketApplied != int.MinValue && System.Math.Abs(bucket - _autoCutBucketApplied) < 2)
@@ -583,6 +588,7 @@ namespace PiPDisabler
                 MeshSurgeryManager.ApplyForOptic(os);
                 LensTransparency.HideAllLensSurfaces(os);
                 PiPDisablerPlugin.DebugLogInfo($"[ScopeLifecycle] Auto hole re-fitted (camera distance bucket {bucket}).");
+                LensProbe.Run(os, "after re-fit");
             }
             catch (Exception ex)
             {
@@ -590,8 +596,11 @@ namespace PiPDisabler
             }
         }
 
+        private static bool _probeDone;
+
         private static void ResetAutoCutFit()
         {
+            _probeDone = false;
             _autoCutBucketSeen = int.MinValue;
             _autoCutBucketApplied = int.MinValue;
         }

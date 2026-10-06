@@ -225,6 +225,9 @@ namespace PiPDisabler
             return true;
         }
 
+        // Diagnostics for the last CutMeshFrustum call (triangles).
+        public static int LastTris, LastRemovedCore, LastRemovedCone, LastKeptByFacing;
+
         public static bool CutMeshFrustum(
             Mesh mesh,
             Transform meshTransform,
@@ -348,11 +351,13 @@ namespace PiPDisabler
                 return newIndex;
             }
 
+            LastTris = 0; LastRemovedCore = 0; LastRemovedCone = 0; LastKeptByFacing = 0;
             for (int s = 0; s < subMeshCount; s++)
             {
                 int[] tris = mesh.GetTriangles(s);
                 for (int i = 0; i < tris.Length; i += 3)
                 {
+                    LastTris++;
                     int i0 = tris[i], i1 = tris[i + 1], i2 = tris[i + 2];
                     bool in0 = IsInsideFrustum(verts[i0]);
                     bool in1 = IsInsideFrustum(verts[i1]);
@@ -364,15 +369,24 @@ namespace PiPDisabler
                     else
                         keepTri = !in0 && !in1 && !in2;
 
-                    if (!keepTri && facingTest
-                        && !IsInCore(verts[i0]) && !IsInCore(verts[i1]) && !IsInCore(verts[i2]))
+                    bool inCore = !keepTri && facingTest
+                        && (IsInCore(verts[i0]) || IsInCore(verts[i1]) || IsInCore(verts[i2]));
+                    if (!keepTri && facingTest && !inCore)
                     {
                         Vector3 v0 = verts[i0], v1 = verts[i1], v2 = verts[i2];
                         Vector3 n = Vector3.Cross(v1 - v0, v2 - v0);
                         if (flipWinding) n = -n;
                         Vector3 c = (v0 + v1 + v2) * (1f / 3f);
                         if (Vector3.Dot(n, eyeL - c) <= 0f)
+                        {
                             keepTri = true; // faces away from the eye: keep (outer skin)
+                            LastKeptByFacing++;
+                        }
+                    }
+                    if (!keepTri)
+                    {
+                        if (inCore) LastRemovedCore++;
+                        else LastRemovedCone++;
                     }
                     if (keepTri)
                     {

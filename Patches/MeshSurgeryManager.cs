@@ -463,8 +463,18 @@ namespace PiPDisabler
                         readable.name = originalAsset.name + "_CUT";
                     }
 
-                    PiPDisablerPlugin.DebugLogInfo(
-                        $"[MeshSurgery] Cut '{originalAsset.name}': {vertsBefore} → {readable.vertexCount} verts");
+                    if (autoCut)
+                    {
+                        var rend = mf.GetComponent<Renderer>();
+                        PiPDisablerPlugin.DebugLogInfo(
+                            $"[MeshSurgery] Cut '{originalAsset.name}' (go='{mf.name}', {LensProbe.DescribeMaterial(rend)}, det={(mf.transform.localToWorldMatrix.determinant < 0f ? "-" : "+")}): " +
+                            $"{vertsBefore} → {readable.vertexCount} verts; tris {MeshPlaneCutter.LastTris}: removed core={MeshPlaneCutter.LastRemovedCore} cone={MeshPlaneCutter.LastRemovedCone}, kept-facing-away={MeshPlaneCutter.LastKeptByFacing}");
+                    }
+                    else
+                    {
+                        PiPDisablerPlugin.DebugLogInfo(
+                            $"[MeshSurgery] Cut '{originalAsset.name}': {vertsBefore} → {readable.vertexCount} verts");
+                    }
 
                     mf.sharedMesh = readable;
                     var cutMesh = readable;
@@ -829,6 +839,16 @@ namespace PiPDisabler
 
         internal static void ForgetAutoPlane() => _autoScopeRoot = null;
 
+        internal static bool TryGetAutoPlaneWorld(out Transform scopeRoot, out Vector3 point, out Vector3 normal)
+        {
+            scopeRoot = _autoScopeRoot;
+            point = default; normal = default;
+            if (scopeRoot == null) return false;
+            point = scopeRoot.TransformPoint(_autoPlaneLocal);
+            normal = scopeRoot.TransformDirection(_autoNormalLocal).normalized;
+            return true;
+        }
+
         /// <summary>Camera-distance bucket the last automatic cut was made with.</summary>
         internal static int LastAutoApexBucketUsed { get; private set; } = int.MinValue;
 
@@ -853,7 +873,7 @@ namespace PiPDisabler
             });
         }
 
-        private static Transform FindWeaponTransform(Transform scopeRoot)
+        internal static Transform FindWeaponTransform(Transform scopeRoot)
         {
             for (var p = scopeRoot; p != null; p = p.parent)
             {

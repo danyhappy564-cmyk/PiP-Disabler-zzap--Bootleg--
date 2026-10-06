@@ -79,6 +79,21 @@ namespace PiPDisabler
             return best > 0f ? best : fallback;
         }
 
+        /// <summary>Debug: every hidden lens surface with its size and position along the bore.</summary>
+        internal static string DescribeHidden(Vector3 lensP, Vector3 lensN)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var e in _hidden)
+            {
+                var tf = e.Renderer != null ? e.Renderer.transform : null;
+                if (tf == null) continue;
+                float r = e.OriginalMesh != null ? WorldRadius(e.OriginalMesh, tf) : 0f;
+                float axial = Vector3.Dot(tf.position - lensP, lensN);
+                sb.Append($" '{tf.name}'(verts={(e.OriginalMesh != null ? e.OriginalMesh.vertexCount : 0)}, r={r * 1000f:F1}mm, {axial * 1000f:+0;-0}mm)");
+            }
+            return sb.Length > 0 ? sb.ToString() : " none";
+        }
+
         private static float WorldRadius(Mesh mesh, Transform tf)
         {
             Vector3 ext = mesh.bounds.extents;
