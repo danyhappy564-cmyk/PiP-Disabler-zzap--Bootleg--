@@ -326,7 +326,11 @@ namespace PiPDisabler
                 if (localCoreR <= 0f) return false;
                 Vector3 diff = v - cL;
                 float axialDist = Vector3.Dot(diff, aL);
-                if (axialDist < 0f || axialDist > -_cStart + _cLen + epsilon) return false; // in front of the lens only
+                // Whole cut length (behind and in front of the lens), minus the eyepiece ring kept
+                // next to the eye. 2.7.2 only covered the part in front of the lens and a reflective
+                // disc right at the lens plane stayed and filled the Razor's lens.
+                float coreStart = -_cStart + (_cPreserve > 0f ? _cPreserve : 0f);
+                if (axialDist < coreStart - epsilon || axialDist > -_cStart + _cLen + epsilon) return false;
                 Vector3 projected = axialDist * aL;
                 return (diff - projected).magnitude <= localCoreR;
             }
