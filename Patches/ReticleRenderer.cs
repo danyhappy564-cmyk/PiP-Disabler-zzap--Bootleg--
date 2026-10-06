@@ -208,6 +208,8 @@ namespace PiPDisabler
                 _scopeDataTransform = os.ScopeData != null ? os.ScopeData.transform : null;
                 _zeroLocalValid = false;
                 _zeroAlignEngaged = false;
+                _stepRelValid = false;
+                _stepLocalValid = false;
 
                 EnsureMeshAndMaterial();
 
@@ -719,12 +721,72 @@ namespace PiPDisabler
 
                 _zeroedForward = bone.TransformDirection(_zeroLocal).normalized;
                 _zeroOffsetActive = true;
-                return Quaternion.FromToRotation(opticForward, axis) * opticRot;
+                bool zeroMoved = _stepLocalValid && Vector3.Angle(local, _stepLastLocal) > 0.005f;
+                _stepLastLocal = local;
+                _stepLocalValid = true;
+                return SmoothWeaponSteps(Quaternion.FromToRotation(opticForward, axis) * opticRot, zeroMoved);
             }
             catch
             {
                 return opticRot;
             }
+        }
+
+        // ── Weapon steps after a zero change (2.7.10) ──
+        // After the zero changes EFT re-aims the weapon in small jumps (log: the scope axis moved
+        // 0.075° in one frame relative to EFT's own camera, which itself moves smoothly). The
+        // "keep scope centred" camera follows the weapon exactly, so at high zoom (FOV ~6°) each
+        // jump shook the whole view. The weapon's offset from EFT's camera is therefore smoothed —
+        // only for a moment after a jump or a zero change, so normal sway is still followed 1:1.
+        private const float StepJumpDeg = 0.04f;       // one-frame move of the weapon vs camera that counts as a jump
+        private const float StepSmoothTime = 0.08f;    // glide time for such jumps
+        private const float StepWindow = 0.6f;         // keep smoothing this long after the last jump
+        private static bool _stepRelValid, _stepLocalValid;
+        private static Quaternion _stepRelRaw, _stepRelSmoothed;
+        private static Vector3 _stepLastLocal;
+        private static float _stepWindowUntil;
+        private static int _stepLogLines;
+
+        private static Quaternion SmoothWeaponSteps(Quaternion target, bool zeroMoved)
+        {
+            var cam = _attachedCamera;
+            if (cam == null) return target;
+            Quaternion camBefore = cam.transform.rotation; // EFT's camera, before this override
+            Quaternion rel = Quaternion.Inverse(camBefore) * target;
+            float now = Time.realtimeSinceStartup;
+            if (!_stepRelValid)
+            {
+                _stepRelRaw = _stepRelSmoothed = rel;
+                _stepRelValid = true;
+                return target;
+            }
+            if (IsFireReloadStateActive())
+            {
+                // Recoil and reload move the weapon fast on purpose: follow 1:1.
+                _stepRelRaw = _stepRelSmoothed = rel;
+                _stepWindowUntil = 0f;
+                return target;
+            }
+            float jump = Quaternion.Angle(rel, _stepRelRaw);
+            _stepRelRaw = rel;
+            if (jump > StepJumpDeg || zeroMoved)
+            {
+                if (now > _stepWindowUntil) _stepLogLines = 0;
+                _stepWindowUntil = now + StepWindow;
+                if (Settings.DebugLogging.Value && _stepLogLines++ < 20)
+                    PiPDisablerPlugin.LogSource.LogInfo(
+                        $"[Reticle][Zero] weapon {(zeroMoved ? "zero changed" : "jumped")} {jump:F3}° in one frame (fov {cam.fieldOfView:F1}°) — gliding over {StepSmoothTime:F2}s");
+            }
+            if (now < _stepWindowUntil)
+            {
+                float k = 1f - Mathf.Exp(-Mathf.Max(Time.unscaledDeltaTime, 0.0001f) / StepSmoothTime);
+                _stepRelSmoothed = Quaternion.Slerp(_stepRelSmoothed, rel, k);
+            }
+            else
+            {
+                _stepRelSmoothed = rel;
+            }
+            return camBefore * _stepRelSmoothed;
         }
 
         /// <summary>Clip-space position of the zeroed aim point (0,0 = screen centre).</summary>
