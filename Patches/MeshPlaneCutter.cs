@@ -505,7 +505,8 @@ namespace PiPDisabler
         /// </summary>
         public static bool CutMeshSightCone(Mesh mesh, Transform meshTransform,
             Vector3 lensCenterWorld, Vector3 lensNormalWorld, float eyeDistance,
-            float lensRadius, float widthScale, Matrix4x4? worldPre = null)
+            float lensRadius, float widthScale, Matrix4x4? worldPre = null,
+            float offAxisMargin = 0f, float[] housingCap = null)
         {
             LastTris = 0; LastSightRemoved = 0; LastSightSplit = 0;
             LastRemovedCore = 0; LastRemovedCone = 0; LastKeptByFacing = 0;
@@ -533,6 +534,31 @@ namespace PiPDisabler
             {
                 if (x <= 0f) return baseLimit * 0.97f;
                 return baseLimit * Mathf.Lerp(0.97f, 1.0f, Mathf.Clamp01(x / 0.02f));
+            }
+            // Off-axis margin (2.8.1): recoil/sway move the camera a few mm off the lens axis; parts
+            // in front of the lens then shift into view by margin·x/(eye+x). Cut that much wider,
+            // but never past the eyepiece housing's outline on screen (housingCap per sector), so on
+            // axis the extra cut stays hidden behind the housing.
+            bool useMargin = offAxisMargin > 0f && housingCap != null && housingCap.Length > 0;
+            float capMax = 0f;
+            if (useMargin) foreach (var c0 in housingCap) capMax = Mathf.Max(capMax, c0);
+            float CapAt(Vector2 p)
+            {
+                int n0 = housingCap.Length;
+                int si = Mathf.Clamp((int)((Mathf.Atan2(p.y, p.x) + Mathf.PI) / (2f * Mathf.PI) * n0), 0, n0 - 1);
+                return housingCap[si] * 0.98f;
+            }
+            float LimitAtP(Vector2 p, float x)
+            {
+                float b = LimitAt(x);
+                if (!useMargin || x <= 0f) return b;
+                return Mathf.Max(b, Mathf.Min(b + offAxisMargin * x / (eyeDistance + x), CapAt(p)));
+            }
+            float LimitMax(float x)
+            {
+                float b = LimitAt(x);
+                if (!useMargin || x <= 0f) return b;
+                return Mathf.Max(b, Mathf.Min(b + offAxisMargin * x / (eyeDistance + x), capMax * 0.98f));
             }
 
             var verts = mesh.vertices;
@@ -607,13 +633,13 @@ namespace PiPDisabler
                         list.Add(AddOld(i0)); list.Add(AddOld(i1)); list.Add(AddOld(i2));
                         continue;
                     }
-                    bool in0 = pr[i0].magnitude < LimitAt(px[i0]);
-                    bool in1 = pr[i1].magnitude < LimitAt(px[i1]);
-                    bool in2 = pr[i2].magnitude < LimitAt(px[i2]);
+                    bool in0 = pr[i0].magnitude < LimitAtP(pr[i0], px[i0]);
+                    bool in1 = pr[i1].magnitude < LimitAtP(pr[i1], px[i1]);
+                    bool in2 = pr[i2].magnitude < LimitAtP(pr[i2], px[i2]);
                     if (in0 && in1 && in2) { LastSightRemoved++; continue; }
                     // A projected triangle is exactly the triangle of the projected corners (central
                     // projection keeps lines straight), so this test is exact.
-                    if (!in0 && !in1 && !in2 && DistToOrigin(pr[i0], pr[i1], pr[i2]) >= Mathf.Max(LimitAt(px[i0]), Mathf.Max(LimitAt(px[i1]), LimitAt(px[i2]))))
+                    if (!in0 && !in1 && !in2 && DistToOrigin(pr[i0], pr[i1], pr[i2]) >= Mathf.Max(LimitMax(px[i0]), Mathf.Max(LimitMax(px[i1]), LimitMax(px[i2]))))
                     {
                         list.Add(AddOld(i0)); list.Add(AddOld(i1)); list.Add(AddOld(i2));
                         continue;
@@ -627,7 +653,7 @@ namespace PiPDisabler
                     if (depth == 0)
                     {
                         Vector2 c = (pr[i0] + pr[i1] + pr[i2]) / 3f;
-                        if (c.magnitude < LimitAt((px[i0] + px[i1] + px[i2]) / 3f)) { LastSightRemoved++; continue; }
+                        if (c.magnitude < LimitAtP(c, (px[i0] + px[i1] + px[i2]) / 3f)) { LastSightRemoved++; continue; }
                         list.Add(AddOld(i0)); list.Add(AddOld(i1)); list.Add(AddOld(i2));
                         continue;
                     }
@@ -640,16 +666,16 @@ namespace PiPDisabler
                 if (depth <= 0)
                 {
                     Vector3 centre = (a.P + b.P + c.P) / 3f;
-                    if (Project(centre, out Vector2 pc, out float xc) && pc.magnitude < LimitAt(xc)) return;
+                    if (Project(centre, out Vector2 pc, out float xc) && pc.magnitude < LimitAtP(pc, xc)) return;
                     list.Add(AddNew(a)); list.Add(AddNew(b)); list.Add(AddNew(c));
                     return;
                 }
                 // A piece wholly outside (or wholly inside) needs no further splitting.
                 if (Project(a.P, out var pa, out var xa) && Project(b.P, out var pb, out var xb) && Project(c.P, out var pcc, out var xcc))
                 {
-                    bool ia = pa.magnitude < LimitAt(xa), ib = pb.magnitude < LimitAt(xb), ic = pcc.magnitude < LimitAt(xcc);
+                    bool ia = pa.magnitude < LimitAtP(pa, xa), ib = pb.magnitude < LimitAtP(pb, xb), ic = pcc.magnitude < LimitAtP(pcc, xcc);
                     if (ia && ib && ic) return;
-                    if (!ia && !ib && !ic && DistToOrigin(pa, pb, pcc) >= Mathf.Max(LimitAt(xa), Mathf.Max(LimitAt(xb), LimitAt(xcc))))
+                    if (!ia && !ib && !ic && DistToOrigin(pa, pb, pcc) >= Mathf.Max(LimitMax(xa), Mathf.Max(LimitMax(xb), LimitMax(xcc))))
                     {
                         list.Add(AddNew(a)); list.Add(AddNew(b)); list.Add(AddNew(c));
                         return;
@@ -679,6 +705,44 @@ namespace PiPDisabler
             mesh.RecalculateBounds();
             if (!hasN) mesh.RecalculateNormals();
             return true;
+        }
+
+        /// <summary>
+        /// Outline of the eyepiece housing as seen from the camera (2.8.1): for each of
+        /// <paramref name="sectors"/> directions around the lens, the farthest projected radius
+        /// (on the lens plane) of housing geometry near the eyepiece (−40 mm … +10 mm along the
+        /// axis, between 0.9× and 2× the lens radius). Smoothed with the neighbours' minimum so a
+        /// thin lever does not count as a solid housing. Same projection as CutMeshSightCone.
+        /// </summary>
+        public static float[] ComputeHousingOutline(IEnumerable<Vector3> worldVerts, Vector3 lensCenterWorld,
+            Vector3 lensNormalWorld, float eyeDistance, float lensRadius, int sectors = 32)
+        {
+            Vector3 n = lensNormalWorld.normalized;
+            Vector3 u = Vector3.Cross(n, Mathf.Abs(Vector3.Dot(n, Vector3.up)) > 0.9f ? Vector3.right : Vector3.up).normalized;
+            Vector3 v = Vector3.Cross(n, u);
+            var max = new float[sectors];
+            foreach (var w in worldVerts)
+            {
+                Vector3 d = w - lensCenterWorld;
+                float x = Vector3.Dot(d, n);
+                if (x < -0.04f || x > 0.01f) continue;
+                float denom = eyeDistance + x;
+                if (denom < 0.02f) continue;
+                float sc = eyeDistance / denom;
+                var p = new Vector2(Vector3.Dot(d, u) * sc, Vector3.Dot(d, v) * sc);
+                float r = p.magnitude;
+                if (r < lensRadius * 0.9f || r > lensRadius * 2f) continue;
+                int si = Mathf.Clamp((int)((Mathf.Atan2(p.y, p.x) + Mathf.PI) / (2f * Mathf.PI) * sectors), 0, sectors - 1);
+                if (r > max[si]) max[si] = r;
+            }
+            var outl = new float[sectors];
+            for (int i = 0; i < sectors; i++)
+            {
+                float a = max[(i + sectors - 1) % sectors], b = max[i], c = max[(i + 1) % sectors];
+                float m = Mathf.Min(a, Mathf.Min(b, c));
+                outl[i] = Mathf.Max(m, lensRadius); // no housing found → no extra cut there
+            }
+            return outl;
         }
 
         private static float Cross2(Vector2 a, Vector2 b) => a.x * b.y - a.y * b.x;

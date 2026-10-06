@@ -1101,6 +1101,8 @@ namespace PiPDisabler
             public bool Predicted, Activate, Started2;
             public CutVariant Variant;
             public Transform StretchFrame;
+            public float[] HousingCap;
+            public float Margin;
             public string Reason;
             public float Started;
             public double Ms;
@@ -1345,6 +1347,16 @@ namespace PiPDisabler
                         return;
                     }
                 }
+                if (job.Predicted)
+                {
+                    foreach (var ex in cache.Variants)
+                        if (ex.Rib == rib && (!ex.Predicted || ex == cache.Active))
+                        {
+                            PiPDisablerPlugin.DebugLogInfo($"[MeshSurgery] Cut ahead for stretch {Mathf.Pow(RibBucketStep, rib):F2} skipped: a real cut for it exists");
+                            _recut = null;
+                            return;
+                        }
+                }
                 job.TargetRib = rib;
                 job.Variant = GetOrCreateVariant(cache, rib, null);
                 job.Variant.Eye = job.EyeBucket;
@@ -1377,6 +1389,12 @@ namespace PiPDisabler
                 planePoint = m.MultiplyPoint3x4(planePoint);
                 planeNormal = m.inverse.transpose.MultiplyVector(planeNormal).normalized;
             }
+            if (job.HousingCap == null)
+            {
+                // Eyepiece housing outline (once per job): caps the off-axis margin.
+                job.Margin = Settings.HoleOffAxisMargin != null ? Settings.HoleOffAxisMargin.Value / 1000f : 0f;
+                job.HousingCap = job.Margin > 0f ? MeasureHousing(cache, job.ScopeRoot, pre, planePoint, planeNormal, job.Eye, job.LensR * Mathf.Max(0.05f, job.Width)) : new float[0];
+            }
             var entries = cache.Entries;
             var variant = job.Variant;
             if (variant.Meshes == null || variant.Meshes.Length != entries.Count) variant.Meshes = new Mesh[entries.Count];
@@ -1392,7 +1410,8 @@ namespace PiPDisabler
                     if (readable != null)
                     {
                         bool ok = MeshPlaneCutter.CutMeshSightCone(readable, entry.Filter.transform,
-                            planePoint, planeNormal, job.Eye, job.LensR, job.Width, pre);
+                            planePoint, planeNormal, job.Eye, job.LensR, job.Width, pre,
+                            job.Margin, job.HousingCap.Length > 0 ? job.HousingCap : null);
                         if (!ok) { readable.Clear(); readable.name = entry.OriginalMesh.name + "_CUT_EMPTY"; }
                         else readable.name = entry.OriginalMesh.name + "_CUT";
                         job.Removed += MeshPlaneCutter.LastSightRemoved;
@@ -1503,6 +1522,32 @@ namespace PiPDisabler
             catch (Exception ex) { PiPDisablerPlugin.DebugLogInfo($"[MeshSurgery] Used-zoom file not saved: {ex.Message}"); }
         }
 
+        private static float[] MeasureHousing(CutProfileCache cache, Transform scopeRoot, Matrix4x4? pre,
+            Vector3 planePoint, Vector3 planeNormal, float eye, float lensR)
+        {
+            var verts = new List<Vector3>(8192);
+            foreach (var e in cache.Entries)
+            {
+                if (e == null || e.Filter == null || e.OriginalMesh == null) continue;
+                if (e.Filter.transform != scopeRoot && !e.Filter.transform.IsChildOf(scopeRoot)) continue;
+                Mesh r = null;
+                try
+                {
+                    r = MeshPlaneCutter.MakeReadableMeshCopy(e.OriginalMesh);
+                    if (r == null) continue;
+                    var m = pre.HasValue ? pre.Value * e.Filter.transform.localToWorldMatrix : e.Filter.transform.localToWorldMatrix;
+                    foreach (var lv in r.vertices) verts.Add(m.MultiplyPoint3x4(lv));
+                }
+                catch { }
+                finally { if (r != null) UnityEngine.Object.Destroy(r); }
+            }
+            var cap = MeshPlaneCutter.ComputeHousingOutline(verts, planePoint, planeNormal, eye, lensR);
+            float mn = float.MaxValue, mx = 0f;
+            foreach (var c in cap) { mn = Mathf.Min(mn, c); mx = Mathf.Max(mx, c); }
+            PiPDisablerPlugin.DebugLogInfo($"[MeshSurgery] Eyepiece housing outline: {mn / lensR:F2}–{mx / lensR:F2}× lens radius ({verts.Count} vertices) — off-axis margin stays inside it");
+            return cap;
+        }
+
         /// <summary>Original (uncut) mesh of a part, if the current cut replaced it.</summary>
         internal static Mesh GetOriginalMesh(MeshFilter mf)
         {
@@ -1594,7 +1639,9 @@ namespace PiPDisabler
         {
             return string.Join("|", new[]
             {
-                PerScopeMeshSurgerySettings.IsAutoCut() ? "Auto" + GetAutoBucketForCut() : "Cylinder",
+                // Auto: the camera distance is per stored cut (variant), not part of the profile —
+                // it changes with the zoom and used to throw all stored cuts away (2.8.0 log).
+                PerScopeMeshSurgerySettings.IsAutoCut() ? "Auto" : "Cylinder",
                 PerScopeMeshSurgerySettings.GetCutWidthMultiplierRaw().ToString("F3"),
                 PerScopeMeshSurgerySettings.GetPlaneOffsetMeters().ToString("F4"),
                 PerScopeMeshSurgerySettings.GetPlane1OffsetMeters().ToString("F4"),

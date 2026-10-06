@@ -66,6 +66,7 @@ namespace PiPDisabler
         public static ConfigEntry<bool> AutoCutShape;
         public static ConfigEntry<SettingsLanguage> Language;
         public static ConfigEntry<bool> ReticleFollowsZoom;
+        public static ConfigEntry<float> HoleOffAxisMargin;
 
         public enum SettingsLanguage { Korean, English }
 
@@ -251,6 +252,11 @@ namespace PiPDisabler
                 new ConfigDescription(
                     "While aiming: redo the automatic hole for the current view now (if something looks cut wrong).",
                     null,
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
+            ConfigEntries.Add(HoleOffAxisMargin = config.Bind("General", "Hole Off-axis Margin (mm)", 4f,
+                new ConfigDescription(
+                    "When firing or moving the weapon shifts a few mm off the eyepiece axis and the scope's inside can show at the lens edge. The automatic hole is cut this much wider for that, never past the eyepiece housing's outline. 0 = off.",
+                    new AcceptableValueRange<float>(0f, 10f),
                     new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(PrecutHeldScope = config.Bind("General", "Pre-cut Held Scope", true,
                 new ConfigDescription(
