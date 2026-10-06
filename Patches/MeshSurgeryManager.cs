@@ -338,29 +338,35 @@ namespace PiPDisabler
                 float lensR = LensTransparency.GetEyepieceLensRadius(scopeRoot);
                 if (lensR > 0.003f && lensR < 0.05f)
                 {
-                    const float Margin = 1.15f;
-                    const float BaseFlare = 0.04f; // radius growth per metre in front of the lens (×"넓이")
-                    float r = lensR * Margin + 0.001f;
-                    float flare = BaseFlare * PerScopeMeshSurgerySettings.GetCutWidthMultiplierRaw() * GetAutoZoomFactorQuantized();
+                    // The lens on screen is the eyepiece seen from the REAL camera. What shows through
+                    // it is the cone from that camera through the eyepiece rim, so that cone (and only
+                    // the faces in it that face the camera) is removed. Its apex distance changes with
+                    // the weapon scale/zoom; ScopeLifecycle re-fits it once the view has settled.
+                    RememberAutoPlane(scopeRoot, planePoint, planeNormal);
+                    LastAutoApexBucketUsed = GetAutoApexBucket();
+                    float eye = DefaultApexDistance * Mathf.Pow(ApexBucketStep, LastAutoApexBucketUsed);
+                    float w = PerScopeMeshSurgerySettings.GetCutWidthMultiplierRaw();
+                    float rNear = lensR * 0.97f; // keep the eyepiece rim facing the eye (2.7.0 cut it → NF eyepiece vanished)
+                    const float RampDepth = 0.02f;
                     autoStart = PerScopeMeshSurgerySettings.GetCutStartOffset();
-                    autoLen = Mathf.Max(PerScopeMeshSurgerySettings.GetCutLength(), autoStart + 0.05f);
+                    autoLen = Mathf.Max(PerScopeMeshSurgerySettings.GetCutLength(), autoStart + RampDepth + 0.05f);
                     autoPreserve = PerScopeMeshSurgerySettings.GetNearPreserveDepth();
-                    float front = autoLen - autoStart;           // distance cut in front of the lens
-                    autoR1 = r;                                   // behind the lens: lens-sized tube
-                    autoP2 = Mathf.Clamp01(autoStart / autoLen);  // lens plane
-                    autoR2 = r;
-                    autoP3 = Mathf.Clamp01(autoP2 + (1f - autoP2) * 0.5f);
-                    autoR3 = r + flare * front * 0.5f;
-                    autoR4 = r + flare * front;
-                    autoEye = planePoint - planeNormal * 0.12f; // a point on the bore axis behind the eyepiece
+                    float front = autoLen - autoStart;
+                    autoR1 = rNear;
+                    autoP2 = Mathf.Clamp01(autoStart / autoLen);                 // lens plane
+                    autoR2 = rNear;
+                    autoP3 = Mathf.Clamp01((autoStart + RampDepth) / autoLen);    // 2 cm in front
+                    autoR3 = lensR * (1.12f + w * RampDepth / eye);
+                    autoR4 = lensR * (1.12f + w * front / eye);                   // straight cone from there
+                    autoEye = planePoint - planeNormal * eye;
                     autoCut = true;
                     PiPDisablerPlugin.LogSource.LogInfo(
-                        $"[MeshSurgery] Auto hole: lens r={lensR * 1000f:F1}mm → tube r={r * 1000f:F1}mm, " +
-                        $"flare={flare:F3}/m, front={front:F2}m (far r={autoR4 * 1000f:F0}mm)");
+                        $"[MeshSurgery] Auto hole: lens r={lensR * 1000f:F1}mm, camera {eye * 1000f:F0}mm behind it, " +
+                        $"width={w:F2} → r {rNear * 1000f:F1}mm at lens, {autoR3 * 1000f:F1}mm at +2cm, {lensR * (1.12f + w * 0.3f / eye) * 1000f:F0}mm at +30cm");
                 }
                 else
                 {
-                    PiPDisablerPlugin.DebugLogInfo(
+                    PiPDisablerPlugin.LogSource.LogInfo(
                         $"[MeshSurgery] Auto hole skipped (eyepiece lens radius {lensR * 1000f:F1}mm not usable) — using manual hole values.");
                 }
             }
@@ -787,33 +793,48 @@ namespace PiPDisabler
             return false;
         }
 
-        // At low magnification more of the scope's inside shows around the lens rim (the weapon is
-        // drawn larger, so the visible cone through the lens is wider); at high magnification it is
-        // almost a straight tube. The automatic hole's flare grows as the zoom drops: ×1 from 4x up,
-        // ×4 at 1x, in 25% buckets so a re-cut only happens when the bucket changes (after the
-        // zoom settles — see ScopeLifecycle.TickAutoCutZoom).
-        private const float AutoZoomBucketStep = 1.25f;
+        // ── Automatic hole: apex = the real camera ──
+        private const float DefaultApexDistance = 0.12f;
+        private const float ApexBucketStep = 1.1f;
+        private static Transform _autoScopeRoot;
+        private static Vector3 _autoPlaneLocal, _autoNormalLocal;
 
-        internal static int GetAutoZoomBucket()
+        private static void RememberAutoPlane(Transform scopeRoot, Vector3 planePoint, Vector3 planeNormal)
         {
-            // Fitted for the scope's LOWEST zoom (× its 확대 배수): the widest view it will show.
-            // One cut per scope — following the current zoom re-cut on every zoom change and the
-            // hole looked different after zooming in and back out (user report, Razor).
-            var range = FovController.GetTemplateZoomRange();
-            float minZoom = Mathf.Min(range.min, range.max);
-            if (minZoom <= 0.1f) minZoom = 1f;
-            float mag = minZoom * PerScopeMeshSurgerySettings.GetZoomMultiplier();
-            float factor = Mathf.Clamp(6f / Mathf.Max(mag, 0.1f), 1f, 6f);
-            return Mathf.RoundToInt(Mathf.Log(factor) / Mathf.Log(AutoZoomBucketStep));
+            _autoScopeRoot = scopeRoot;
+            _autoPlaneLocal = scopeRoot.InverseTransformPoint(planePoint);
+            _autoNormalLocal = scopeRoot.InverseTransformDirection(planeNormal);
         }
 
-        private static float GetAutoZoomFactorQuantized() => Mathf.Pow(AutoZoomBucketStep, GetAutoZoomBucket());
+        /// <summary>Distance from the main camera to the eyepiece along the bore, in 10% buckets.</summary>
+        internal static int GetAutoApexBucket()
+        {
+            float e = DefaultApexDistance;
+            try
+            {
+                var cam = Helpers.GetMainCamera();
+                if (_autoScopeRoot != null && cam != null)
+                {
+                    Vector3 p = _autoScopeRoot.TransformPoint(_autoPlaneLocal);
+                    Vector3 n = _autoScopeRoot.TransformDirection(_autoNormalLocal).normalized;
+                    float d = Vector3.Dot(p - cam.transform.position, n);
+                    if (d > 0.02f && d < 1.5f) e = d;
+                }
+            }
+            catch { }
+            return Mathf.RoundToInt(Mathf.Log(e / DefaultApexDistance) / Mathf.Log(ApexBucketStep));
+        }
+
+        internal static void ForgetAutoPlane() => _autoScopeRoot = null;
+
+        /// <summary>Camera-distance bucket the last automatic cut was made with.</summary>
+        internal static int LastAutoApexBucketUsed { get; private set; } = int.MinValue;
 
         private static string BuildCutSettingsSignature()
         {
             return string.Join("|", new[]
             {
-                PerScopeMeshSurgerySettings.IsAutoCut() ? "Auto" + GetAutoZoomBucket() : "Cylinder",
+                PerScopeMeshSurgerySettings.IsAutoCut() ? "Auto" + GetAutoApexBucket() : "Cylinder",
                 PerScopeMeshSurgerySettings.GetCutWidthMultiplierRaw().ToString("F3"),
                 PerScopeMeshSurgerySettings.GetPlaneOffsetMeters().ToString("F4"),
                 PerScopeMeshSurgerySettings.GetPlane1OffsetMeters().ToString("F4"),

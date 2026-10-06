@@ -546,8 +546,11 @@ namespace PiPDisabler
             }
         }
 
-        // ── Automatic hole follows the zoom (re-cut once the zoom has settled) ──
-        private const float AutoCutSettleTime = 0.35f;
+        // ── Automatic hole follows the camera distance (re-fit once the view has settled) ──
+        // The weapon scale changes with zoom, which moves the eyepiece relative to the camera; the
+        // hole is re-fitted when that distance has changed by ≥20% and stayed put for 0.6 s (not
+        // during ADS motion, recoil or zoom scrolling). Same distance → same hole every time.
+        private const float AutoCutSettleTime = 0.6f;
         private static int _autoCutBucketSeen = int.MinValue;
         private static float _autoCutBucketSince;
         private static int _autoCutBucketApplied = int.MinValue;
@@ -558,7 +561,7 @@ namespace PiPDisabler
             if (os == null || _meshSurgerySuppressedByReload || !PerScopeMeshSurgerySettings.IsAutoCut())
                 return;
 
-            int bucket = MeshSurgeryManager.GetAutoZoomBucket();
+            int bucket = MeshSurgeryManager.GetAutoApexBucket();
             float now = Time.realtimeSinceStartup;
             if (bucket != _autoCutBucketSeen)
             {
@@ -566,24 +569,31 @@ namespace PiPDisabler
                 _autoCutBucketSince = now;
                 return;
             }
-            if (bucket == _autoCutBucketApplied || now - _autoCutBucketSince < AutoCutSettleTime)
+            if (now - _autoCutBucketSince < AutoCutSettleTime || SettingsApplyGate.IsSettingsWindowOpen)
                 return;
-            if (SettingsApplyGate.IsSettingsWindowOpen)
+            if (_autoCutBucketApplied == int.MinValue)
+                _autoCutBucketApplied = MeshSurgeryManager.LastAutoApexBucketUsed; // what the enter cut used
+            if (_autoCutBucketApplied != int.MinValue && System.Math.Abs(bucket - _autoCutBucketApplied) < 2)
                 return;
 
             _autoCutBucketApplied = bucket;
             try
             {
-                // Same signature → ApplyForOptic only re-attaches the cached cut meshes (no new meshes).
                 MeshSurgeryManager.RestoreForScope(os.transform);
                 MeshSurgeryManager.ApplyForOptic(os);
                 LensTransparency.HideAllLensSurfaces(os);
-                PiPDisablerPlugin.DebugLogInfo($"[ScopeLifecycle] Auto hole re-fitted for zoom bucket {bucket}.");
+                PiPDisablerPlugin.DebugLogInfo($"[ScopeLifecycle] Auto hole re-fitted (camera distance bucket {bucket}).");
             }
             catch (Exception ex)
             {
                 PiPDisablerPlugin.DebugLogInfo($"[ScopeLifecycle] Auto hole re-fit failed: {ex.Message}");
             }
+        }
+
+        private static void ResetAutoCutFit()
+        {
+            _autoCutBucketSeen = int.MinValue;
+            _autoCutBucketApplied = int.MinValue;
         }
 
         /// <summary>Exit and re-enter the current scope so changed settings take effect now.</summary>
@@ -1227,6 +1237,7 @@ namespace PiPDisabler
             _isScoped = false;
             _activeOptic = null;
             PerScopeMeshSurgerySettings.ClearActiveScope();
+            ResetAutoCutFit();
 
             // If this scope was bypassed, skip mod cleanup paths.
             if (_modBypassedForCurrentScope)

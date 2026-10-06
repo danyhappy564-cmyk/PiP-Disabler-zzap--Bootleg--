@@ -173,6 +173,9 @@ namespace PiPDisabler
                 {
                     _savedMarkTex.filterMode = FilterMode.Trilinear;
                     _savedMarkTex.anisoLevel = 16;
+                    // Thin ghost lines next to the thick posts at high zoom (Razor) look like texture
+                    // edge bleed from a repeating wrap; a reticle never needs to tile.
+                    _savedMarkTex.wrapMode = TextureWrapMode.Clamp;
                     if (_reticleSource == ReticleSource.None)
                         _reticleSource = ReticleSource.Texture;
                 }

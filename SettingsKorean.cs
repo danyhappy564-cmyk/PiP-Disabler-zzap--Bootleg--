@@ -134,7 +134,7 @@ namespace PiPDisabler
             [K("Per scope settings", "Use Manual Cut Shape")] = new Text(CatPerScope, "이 스코프는 수동 구멍 사용",
                 "켜면 이 스코프만 자동 계산 대신 아래 '몸통 구멍 - …' 수동 값을 씁니다." + PerScopeCut),
             [K("Per scope settings", "Cut Width Multiplier")] = new Text(CatPerScope, "몸통 구멍 - 넓이",
-                "자동 구멍: 앞쪽으로 갈수록 넓어지는 정도(1 = 기본, 0.2 = 거의 곧은 통로, 2 = 두 배로 넓게). 수동 구멍: 스코프 앞쪽 구멍 크기 배수. 겉모양이 잘려 보이면 줄이고, 렌즈 너머에 총 앞부분이 걸려 보이면 늘리세요." + PerScopeCut),
+                "자동 구멍: 1 = 렌즈로 보이는 범위만 정확히(권장). 낮추면 덜 지워서 안쪽이 보일 수 있고, 높이면 더 지움. 수동 구멍: 스코프 앞쪽 구멍 크기 배수." + PerScopeCut),
             [K("Per scope settings", "CutLength")] = new Text(CatPerScope, "몸통 구멍 - 깊이",
                 "이 모드는 스코프 몸통에 구멍을 뚫어 그 사이로 봅니다. 렌즈 안에 몸통 안쪽(검은 원통)이 보이면 늘리세요." + PerScopeCut),
             [K("Per scope settings", "Plane1Radius")] = new Text(CatPerScope, "몸통 구멍 - 눈 쪽 크기",
