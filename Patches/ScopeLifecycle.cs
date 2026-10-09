@@ -579,6 +579,7 @@ namespace PiPDisabler
                 _autoCutBucketSeen = bucket;
                 _autoCutRibSeen = rib;
                 _autoCutBucketSince = now;
+                _settleLogged = false;
                 return;
             }
             if (now - _autoCutBucketSince < AutoCutSettleTime || SettingsApplyGate.IsSettingsWindowOpen)
@@ -589,15 +590,34 @@ namespace PiPDisabler
                 LensProbe.RunAtRender(os, $"view settled (camera bucket {bucket}, cut made with {MeshSurgeryManager.LastAutoApexBucketUsed})");
             }
             // Remember the settled distance so the next aim cuts right away (cache hit, no recut).
-            MeshSurgeryManager.RememberSettledBucket(bucket);
+            MeshSurgeryManager.RememberSettledBucket(bucket, rib);
 
             if (MeshSurgeryManager.RecutRunning) return;
-            if (!MeshSurgeryManager.AutoCutIsStale(bucket, rib, out string why))
+            bool stale = MeshSurgeryManager.AutoCutIsStale(bucket, rib, out string why);
+            // "Re-cut every aim": what the Home key does, once per zoom level per aim.
+            if (!stale && Settings.RecutEveryAim.Value && !_freshCutRibs.Contains(rib))
             {
-                // "Re-cut every aim": what the Home key does, once per zoom level per aim. After a game
-                // restart a cut can look wrong while every stale check passes; a fresh cut fixes it.
-                if (!Settings.RecutEveryAim.Value || _freshCutRibs.Contains(rib)) return;
+                stale = true;
                 why = "re-cut every aim";
+            }
+            if (!_settleLogged)
+            {
+                // Always-on, once per settled view: lets a user log show whether zooming re-fits the hole.
+                _settleLogged = true;
+                PiPDisablerPlugin.LogSource.LogInfo(
+                    $"[AutoCut] View settled: weapon stretch {MeshSurgeryManager.RenderRibcage():F2}, camera {MeshSurgeryManager.BucketToMm(bucket):F0}mm; " +
+                    $"{MeshSurgeryManager.DescribeActiveCut()} → {(stale ? "re-cut (" + why + ")" : "fits")}");
+            }
+            if (!stale)
+            {
+                // Settled with a fitting cut: now cut the other used zoom levels ahead (aimed pose).
+                if (!_cutAheadQueued)
+                {
+                    _cutAheadQueued = true;
+                    int n = MeshSurgeryManager.QueueCutAhead(os, rib);
+                    if (n > 0) PiPDisablerPlugin.DebugLogInfo($"[ScopeLifecycle] Queued {n} cut(s) ahead for other zoom levels");
+                }
+                return;
             }
             if (now - _autoCutLastRecut < 0.3f) return;
             _autoCutLastRecut = now;
@@ -649,6 +669,7 @@ namespace PiPDisabler
         private static float _autoCutLastRecut;
 
         private static bool _probeDone;
+        private static bool _settleLogged, _cutAheadQueued;
 
         private static void ResetAutoCutFit()
         {
@@ -658,6 +679,8 @@ namespace PiPDisabler
             MeshSurgeryManager.CancelAsyncRecut("scope exit");
             _probeAfterRecutDone = false;
             _freshCutRibs.Clear();
+            _settleLogged = false;
+            _cutAheadQueued = false;
         }
 
         /// <summary>Exit and re-enter the current scope so changed settings take effect now.</summary>

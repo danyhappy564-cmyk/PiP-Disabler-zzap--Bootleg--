@@ -381,13 +381,15 @@ namespace PiPDisabler
                     // Camera distance changes with weapon scale/zoom; ScopeLifecycle re-fits once the
                     // view has settled.
                     RememberAutoPlane(scopeRoot, planePoint, planeNormal);
-                    LastAutoApexBucketUsed = GetAutoBucketForCut();
+                    int cutRib = RibBucket(RenderRibcage());
+                    bool knownEye = HasSettledBucket(cutRib);
+                    LastAutoApexBucketUsed = GetAutoBucketForCut(cutRib);
                     autoEyeDist = DefaultApexDistance * Mathf.Pow(ApexBucketStep, LastAutoApexBucketUsed);
                     autoLensR = lensR;
                     autoWidth = PerScopeMeshSurgerySettings.GetCutWidthMultiplierRaw();
                     autoCut = true;
                     PiPDisablerPlugin.LogSource.LogInfo(
-                        $"[MeshSurgery] Auto hole (line of sight): lens r={lensR * 1000f:F1}mm, camera {autoEyeDist * 1000f:F0}mm behind it ({(HasSettledBucket() ? "remembered settled distance" : "live, not settled yet")}), " +
+                        $"[MeshSurgery] Auto hole (line of sight): lens r={lensR * 1000f:F1}mm, camera {autoEyeDist * 1000f:F0}mm behind it ({(knownEye ? "remembered for this zoom" : "live, not settled yet")}), " +
                         $"weapon stretch={CurrentRibcage():F3}, width={autoWidth:F2} → removes what projects inside {lensR * autoWidth * 970f:F1}mm (eye side) / {lensR * autoWidth * 1000f:F1}mm (2cm+ past the lens) on the lens plane");
                 }
                 else
@@ -540,31 +542,15 @@ namespace PiPDisabler
             cache.SettingsSignature = BuildCutSettingsSignature();
             if (autoCut && cache.Entries.Count > 0)
             {
-                var used = precut ? GetUsedZooms(cache.ScopeKey) : null;
-                if (used != null && used.Count > 0)
-                {
-                    // Cut ahead for the zoom levels this scope was used at (weapon stretch predicted).
-                    foreach (var u in used)
-                        StartJob(cache, scopeRoot, planePoint, planeNormal, DefaultApexDistance * Mathf.Pow(ApexBucketStep, u.Value),
-                            autoLensR, autoWidth, u.Value, $"pre-cut for zoom stretch {Mathf.Pow(RibBucketStep, u.Key):F2}",
-                            targetRib: u.Key, predicted: true, activate: false, cancelOthers: false);
-                }
-                else
-                {
-                    StartJob(cache, scopeRoot, planePoint, planeNormal, autoEyeDist, autoLensR, autoWidth, LastAutoApexBucketUsed,
-                        precut ? "pre-cut while holding the weapon" : "first cut",
-                        targetRib: int.MinValue, predicted: false, activate: !precut, cancelOthers: !precut);
-                    var others = precut ? null : GetUsedZooms(cache.ScopeKey);
-                    if (others != null)
-                    {
-                        int nowRib = RibBucket(RenderRibcage());
-                        foreach (var u in others)
-                            if (System.Math.Abs(u.Key - nowRib) > 1)
-                                StartJob(cache, scopeRoot, planePoint, planeNormal, DefaultApexDistance * Mathf.Pow(ApexBucketStep, u.Value),
-                                    autoLensR, autoWidth, u.Value, $"cut ahead for zoom stretch {Mathf.Pow(RibBucketStep, u.Key):F2}",
-                                    targetRib: u.Key, predicted: true, activate: false, cancelOthers: false);
-                    }
-                }
+                // 2.8.4: one cut for the stretch now. A pre-cut (weapon held, not aimed) is only
+                // provisional and is confirmed once the aim settles. Cuts for the other used zoom
+                // levels are made after the aim has settled (QueueCutAhead): EFT stretches the
+                // weapon along a body axis, and in the lowered (not aimed) pose that axis is not
+                // along the barrel, so a stretch predicted there skews the cut (wrong hole after a
+                // restart / in the next raid until Home was pressed).
+                StartJob(cache, scopeRoot, planePoint, planeNormal, autoEyeDist, autoLensR, autoWidth, LastAutoApexBucketUsed,
+                    precut ? "pre-cut while holding the weapon" : "first cut",
+                    targetRib: int.MinValue, predicted: false, activate: !precut, cancelOthers: !precut, provisional: precut);
             }
             _lastCutAttemptFrame = Time.frameCount;
             _lastAttemptEntries = cache.Entries.Count;
@@ -608,8 +594,12 @@ namespace PiPDisabler
             if (cache.Active == null || !cache.Active.Complete)
             {
                 CutVariant best = null;
+                int ribNow = RibBucket(RenderRibcage());
                 foreach (var v in cache.Variants)
-                    if (v.Complete && (best == null || v.LastUsed > best.LastUsed)) best = v;
+                    if (v.Complete && v.Rib == ribNow) { best = v; break; }
+                if (best == null)
+                    foreach (var v in cache.Variants)
+                        if (v.Complete && (best == null || v.LastUsed > best.LastUsed)) best = v;
                 if (best != null)
                 {
                     ActivateVariant(cache, best);
@@ -1131,7 +1121,7 @@ namespace PiPDisabler
             public Vector3 PlaneLocal, NormalLocal;
             public float Eye, LensR, Width;
             public int EyeBucket, TargetRib, Next, Removed, Split, Done;
-            public bool Predicted, Activate, Started2;
+            public bool Predicted, Provisional, Activate, Started2;
             public CutVariant Variant;
             public Transform StretchFrame;
             public float[] HousingCap;
@@ -1176,9 +1166,56 @@ namespace PiPDisabler
             return true;
         }
 
+        /// <summary>
+        /// Aim settled (2.8.4): cut ahead, in the background, the other zoom levels this scope was
+        /// used at (weapon stretch predicted from the stretch now — valid here, in the aimed pose).
+        /// </summary>
+        internal static int QueueCutAhead(OpticSight os, int nowRib)
+        {
+            var cache = _currentWeaponCache;
+            if (os == null || cache == null || !cache.Built || cache.Entries.Count == 0 || !PerScopeMeshSurgerySettings.IsAutoCut()) return 0;
+            var used = GetUsedZooms(cache.ScopeKey);
+            if (used == null || used.Count == 0) return 0;
+            var scopeRoot = ScopeHierarchy.FindScopeRoot(os.transform);
+            if (!scopeRoot) return 0;
+            var activeMode = ResolveActiveMode(os, scopeRoot);
+            if (!activeMode) activeMode = os.transform;
+            if (!ScopeHierarchy.TryGetPlane(os, scopeRoot, activeMode, out var planePoint, out var planeNormal, out _)) return 0;
+            planePoint += planeNormal * PerScopeMeshSurgerySettings.GetPlane1OffsetMeters();
+            float lensR = LensTransparency.GetEyepieceLensRadius(scopeRoot);
+            if (lensR <= 0.003f || lensR >= 0.05f) return 0;
+            int queued = 0;
+            foreach (var u in used)
+            {
+                if (System.Math.Abs(u.Key - nowRib) <= 1) continue;
+                bool have = false;
+                foreach (var v in cache.Variants) if (v.Complete && v.Rib == u.Key) { have = true; break; }
+                if (!have && _recut != null && ReferenceEquals(_recut.Cache, cache) && _recut.TargetRib == u.Key) have = true;
+                if (!have) foreach (var j in _jobQueue) if (ReferenceEquals(j.Cache, cache) && j.TargetRib == u.Key) { have = true; break; }
+                if (have) continue;
+                StartJob(cache, scopeRoot, planePoint, planeNormal, DefaultApexDistance * Mathf.Pow(ApexBucketStep, u.Value),
+                    lensR, PerScopeMeshSurgerySettings.GetCutWidthMultiplierRaw(), u.Value, $"cut ahead for zoom stretch {Mathf.Pow(RibBucketStep, u.Key):F2}",
+                    targetRib: u.Key, predicted: true, activate: false, cancelOthers: false);
+                queued++;
+            }
+            return queued;
+        }
+
+        /// <summary>English one-liner of the cut on screen, for the always-on settle log.</summary>
+        internal static string DescribeActiveCut()
+        {
+            var c = _currentWeaponCache;
+            if (c == null || !c.Built) return "no cut cache";
+            if (c.Active == null) return "no cut on screen";
+            return $"cut on screen made for stretch {Mathf.Pow(RibBucketStep, c.Active.Rib):F2}, camera {DefaultApexDistance * Mathf.Pow(ApexBucketStep, c.Active.Eye) * 1000f:F0}mm" +
+                   $"{(c.Active.Complete ? "" : " (unfinished)")}{(c.Active.Predicted ? " (made ahead)" : "")}";
+        }
+
+        internal static float BucketToMm(int eyeBucket) => DefaultApexDistance * Mathf.Pow(ApexBucketStep, eyeBucket) * 1000f;
+
         private static void StartJob(CutProfileCache cache, Transform scopeRoot, Vector3 planePoint, Vector3 planeNormal,
             float eye, float lensR, float width, int eyeBucket, string reason,
-            int targetRib, bool predicted, bool activate, bool cancelOthers)
+            int targetRib, bool predicted, bool activate, bool cancelOthers, bool provisional = false)
         {
             if (cancelOthers) CancelAsyncRecut("restarted", all: false);
             EnsureRenderHook();
@@ -1194,6 +1231,7 @@ namespace PiPDisabler
                 EyeBucket = eyeBucket,
                 TargetRib = targetRib,
                 Predicted = predicted,
+                Provisional = provisional,
                 Activate = activate,
                 Reason = reason,
                 Started = Time.realtimeSinceStartup
@@ -1394,7 +1432,7 @@ namespace PiPDisabler
                 job.Variant = GetOrCreateVariant(cache, rib, null);
                 job.Variant.Eye = job.EyeBucket;
                 job.Variant.Complete = false;
-                job.Variant.Predicted = job.Predicted;
+                job.Variant.Predicted = job.Predicted || job.Provisional; // confirmed after the aim settles
                 if (job.Activate) cache.Active = job.Variant;
                 PiPDisablerPlugin.DebugLogInfo(
                     $"[MeshSurgery] Cut started ({job.Reason}): weapon stretch {Mathf.Pow(RibBucketStep, rib):F2}{(job.Predicted ? $" predicted from {sNow:F3} via '{job.StretchFrame.name}'" : "")}");
@@ -1483,7 +1521,7 @@ namespace PiPDisabler
             variant.LastUsed = Time.realtimeSinceStartup;
             if (job.Activate) LastAutoApexBucketUsed = job.EyeBucket;
             _recut = null;
-            if (!job.Predicted)
+            if (!job.Predicted && !job.Provisional)
             {
                 _recutFinished = job.Activate;
                 if (job.Activate) RecordUsedZoom(cache.ScopeKey, job.TargetRib, job.EyeBucket);
@@ -1600,6 +1638,11 @@ namespace PiPDisabler
         private static bool _settledLoaded;
         private static string SettledFilePath => System.IO.Path.Combine(BepInEx.Paths.ConfigPath, "PiP-Disabler.camera-distance.txt");
 
+        // 2.8.4: kept per zoom level ("scope|stretch bucket"). One value per scope stored the last
+        // settled distance whatever the zoom (e.g. 575 mm at stretch 2.65), so the next raid's
+        // first cut at 1x was made for the wrong camera distance until Home re-cut it.
+        private static string SettledKey(string scope, int rib) => scope + "|" + rib;
+
         private static void LoadSettled()
         {
             if (_settledLoaded) return;
@@ -1611,35 +1654,43 @@ namespace PiPDisabler
                 {
                     int eq = line.LastIndexOf('=');
                     if (eq <= 0) continue;
+                    string k = line.Substring(0, eq).Trim();
+                    if (k.IndexOf('|') < 0) continue; // old per-scope value (any zoom): not usable
                     if (int.TryParse(line.Substring(eq + 1).Trim(), out int b))
-                        _settledBucket[line.Substring(0, eq).Trim()] = b;
+                        _settledBucket[k] = b;
                 }
-                PiPDisablerPlugin.DebugLogInfo($"[MeshSurgery] Loaded settled camera distance for {_settledBucket.Count} scopes");
+                PiPDisablerPlugin.DebugLogInfo($"[MeshSurgery] Loaded settled camera distance for {_settledBucket.Count} scope zoom levels");
             }
             catch (Exception ex) { PiPDisablerPlugin.DebugLogInfo($"[MeshSurgery] Camera distance file not read: {ex.Message}"); }
         }
 
-        /// <summary>Camera-distance bucket to cut with: the remembered settled one, else the live one.</summary>
-        internal static int GetAutoBucketForCut()
+        private static bool TryGetKnownBucket(int rib, out int b)
         {
+            b = 0;
             LoadSettled();
             string key = PerScopeMeshSurgerySettings.ActiveScopeKey;
-            if (!string.IsNullOrEmpty(key) && _settledBucket.TryGetValue(key, out int b)) return b;
-            return GetAutoApexBucket();
+            if (string.IsNullOrEmpty(key)) return false;
+            if (_settledBucket.TryGetValue(SettledKey(key, rib), out b)) return true;
+            // A real cut made at this zoom level before (used-zoom file) knows its distance too.
+            var used = GetUsedZooms(key);
+            if (used != null)
+                foreach (var u in used)
+                    if (System.Math.Abs(u.Key - rib) <= 1) { b = u.Value; return true; }
+            return false;
         }
 
-        internal static bool HasSettledBucket()
-        {
-            LoadSettled();
-            string key = PerScopeMeshSurgerySettings.ActiveScopeKey;
-            return !string.IsNullOrEmpty(key) && _settledBucket.ContainsKey(key);
-        }
+        /// <summary>Camera-distance bucket to cut with: the one remembered for this zoom level, else the live one.</summary>
+        internal static int GetAutoBucketForCut(int rib)
+            => TryGetKnownBucket(rib, out int b) ? b : GetAutoApexBucket();
 
-        internal static void RememberSettledBucket(int bucket)
+        internal static bool HasSettledBucket(int rib) => TryGetKnownBucket(rib, out _);
+
+        internal static void RememberSettledBucket(int bucket, int rib)
         {
             LoadSettled();
-            string key = PerScopeMeshSurgerySettings.ActiveScopeKey;
-            if (string.IsNullOrEmpty(key)) return;
+            string scope = PerScopeMeshSurgerySettings.ActiveScopeKey;
+            if (string.IsNullOrEmpty(scope)) return;
+            string key = SettledKey(scope, rib);
             if (_settledBucket.TryGetValue(key, out int old) && old == bucket) return;
             _settledBucket[key] = bucket;
             try

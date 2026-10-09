@@ -476,6 +476,8 @@ namespace PiPDisabler
         // ── Automatic hole (2.7.6): remove what the camera sees through the lens ──
         // Diagnostics for the last CutMeshSightCone call.
         public static int LastSightRemoved, LastSightSplit;
+        [ThreadStatic] private static List<SVert> _clipPolyTs;
+        private static List<SVert> _clipPoly => _clipPolyTs ?? (_clipPolyTs = new List<SVert>(4));
 
         private struct SVert
         {
@@ -486,6 +488,13 @@ namespace PiPDisabler
                 N = ((a.N + b.N) * 0.5f).normalized,
                 T = (a.T + b.T) * 0.5f,
                 UV = (a.UV + b.UV) * 0.5f
+            };
+            public static SVert Lerp(in SVert a, in SVert b, float t) => new SVert
+            {
+                P = Vector3.LerpUnclamped(a.P, b.P, t),
+                N = Vector3.LerpUnclamped(a.N, b.N, t).normalized,
+                T = Vector4.LerpUnclamped(a.T, b.T, t),
+                UV = Vector2.LerpUnclamped(a.UV, b.UV, t)
             };
         }
 
@@ -542,11 +551,15 @@ namespace PiPDisabler
             bool useMargin = offAxisMargin > 0f && housingCap != null && housingCap.Length > 0;
             float capMax = 0f;
             if (useMargin) foreach (var c0 in housingCap) capMax = Mathf.Max(capMax, c0);
+            // Interpolated between sector centres (2.8.4): a step per sector made the hole edge jagged.
             float CapAt(Vector2 p)
             {
                 int n0 = housingCap.Length;
-                int si = Mathf.Clamp((int)((Mathf.Atan2(p.y, p.x) + Mathf.PI) / (2f * Mathf.PI) * n0), 0, n0 - 1);
-                return housingCap[si] * 0.98f;
+                float f = (Mathf.Atan2(p.y, p.x) + Mathf.PI) / (2f * Mathf.PI) * n0 - 0.5f;
+                int i0 = Mathf.FloorToInt(f);
+                float t = f - i0;
+                int a0 = ((i0 % n0) + n0) % n0, b0 = (a0 + 1) % n0;
+                return Mathf.Lerp(housingCap[a0], housingCap[b0], t) * 0.98f;
             }
             float LimitAtP(Vector2 p, float x)
             {
@@ -649,8 +662,8 @@ namespace PiPDisabler
                     LastSightSplit++;
                     float size = Mathf.Max((pr[i0] - pr[i1]).magnitude,
                         Mathf.Max((pr[i1] - pr[i2]).magnitude, (pr[i2] - pr[i0]).magnitude));
-                    int depth = size < 0.08f * lensRadius ? 0 : size < 0.25f * lensRadius ? 2 : size < 0.7f * lensRadius ? 3 : 4;
-                    if (depth == 0)
+                    int depth = size < 0.08f * lensRadius ? 0 : size < 0.25f * lensRadius ? 2 : size < 0.7f * lensRadius ? 3 : size < 2f * lensRadius ? 4 : 5;
+                    if (depth == 0 && !in0 && !in1 && !in2)
                     {
                         Vector2 c = (pr[i0] + pr[i1] + pr[i2]) / 3f;
                         if (c.magnitude < LimitAtP(c, (px[i0] + px[i1] + px[i2]) / 3f)) { LastSightRemoved++; continue; }
@@ -665,9 +678,7 @@ namespace PiPDisabler
             {
                 if (depth <= 0)
                 {
-                    Vector3 centre = (a.P + b.P + c.P) / 3f;
-                    if (Project(centre, out Vector2 pc, out float xc) && pc.magnitude < LimitAtP(pc, xc)) return;
-                    list.Add(AddNew(a)); list.Add(AddNew(b)); list.Add(AddNew(c));
+                    EmitClipped(a, b, c, list);
                     return;
                 }
                 // A piece wholly outside (or wholly inside) needs no further splitting.
@@ -686,6 +697,59 @@ namespace PiPDisabler
                 Split(ab, b, bc, depth - 1, list);
                 Split(ca, bc, c, depth - 1, list);
                 Split(ab, bc, ca, depth - 1, list);
+            }
+
+            // >= 0: outside the line of sight (kept), < 0: inside (removed).
+            float Keep(in SVert q)
+            {
+                if (!Project(q.P, out var pq, out var xq)) return 1f; // at/behind the camera
+                return pq.magnitude - LimitAtP(pq, xq);
+            }
+            // Point on the edge where it leaves the line of sight (bisection along the 3D edge; the
+            // projection of a segment is a segment, so there is one crossing). Always searched from
+            // the kept end, so two pieces sharing the edge get the very same point (no crack).
+            SVert Crossing(in SVert keep, in SVert cut)
+            {
+                float lo = 0f, hi = 1f;
+                for (int it = 0; it < 12; it++)
+                {
+                    float m = (lo + hi) * 0.5f;
+                    if (Keep(SVert.Lerp(keep, cut, m)) >= 0f) lo = m; else hi = m;
+                }
+                return SVert.Lerp(keep, cut, lo);
+            }
+            // Smallest piece (2.8.4): clip it on the lens edge instead of keeping/removing it whole by
+            // its centre. Whole pieces left a saw-tooth edge that looked jagged when zoomed in.
+            void EmitClipped(in SVert a, in SVert b, in SVert c, List<int> list)
+            {
+                float fa = Keep(a), fb = Keep(b), fc = Keep(c);
+                bool ka = fa >= 0f, kb = fb >= 0f, kc = fc >= 0f;
+                if (!ka && !kb && !kc) return;
+                if (ka && kb && kc)
+                {
+                    Vector3 centre = (a.P + b.P + c.P) / 3f;
+                    if (Project(centre, out Vector2 pc, out float xc) && pc.magnitude < LimitAtP(pc, xc)) return;
+                    list.Add(AddNew(a)); list.Add(AddNew(b)); list.Add(AddNew(c));
+                    return;
+                }
+                // Keep side of the triangle (Sutherland–Hodgman against the lens edge), same winding.
+                var poly = _clipPoly;
+                poly.Clear();
+                if (ka) poly.Add(a);
+                if (ka != kb) poly.Add(ka ? Crossing(a, b) : Crossing(b, a));
+                if (kb) poly.Add(b);
+                if (kb != kc) poly.Add(kb ? Crossing(b, c) : Crossing(c, b));
+                if (kc) poly.Add(c);
+                if (kc != ka) poly.Add(kc ? Crossing(c, a) : Crossing(a, c));
+                if (poly.Count < 3) return;
+                int first = AddNew(poly[0]);
+                int prev = AddNew(poly[1]);
+                for (int k = 2; k < poly.Count; k++)
+                {
+                    int cur = AddNew(poly[k]);
+                    list.Add(first); list.Add(prev); list.Add(cur);
+                    prev = cur;
+                }
             }
 
             long kept = 0;
