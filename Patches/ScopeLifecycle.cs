@@ -381,6 +381,7 @@ namespace PiPDisabler
 
         public static void Tick()
         {
+            WatchEnterFrames();
             if (!_isScoped) return;
             if (_modBypassedForCurrentScope) return;
 
@@ -591,11 +592,21 @@ namespace PiPDisabler
             MeshSurgeryManager.RememberSettledBucket(bucket);
 
             if (MeshSurgeryManager.RecutRunning) return;
-            if (!MeshSurgeryManager.AutoCutIsStale(bucket, rib, out string why)) return;
+            if (!MeshSurgeryManager.AutoCutIsStale(bucket, rib, out string why))
+            {
+                // "Re-cut every aim": what the Home key does, once per zoom level per aim. After a game
+                // restart a cut can look wrong while every stale check passes; a fresh cut fixes it.
+                if (!Settings.RecutEveryAim.Value || _freshCutRibs.Contains(rib)) return;
+                why = "re-cut every aim";
+            }
             if (now - _autoCutLastRecut < 0.3f) return;
             _autoCutLastRecut = now;
             MeshSurgeryManager.StartAsyncRecut(os, bucket, why);
+            _freshCutRibs.Add(rib); // tried once for this zoom level; stale checks still retry
         }
+
+        // Zoom levels (weapon stretch buckets) cut fresh during the current aim.
+        private static readonly HashSet<int> _freshCutRibs = new HashSet<int>();
 
         /// <summary>Hotkey: redo the automatic hole for the current view now.</summary>
         public static void RecutHoleNow()
@@ -606,6 +617,7 @@ namespace PiPDisabler
                 return;
             }
             bool ok = MeshSurgeryManager.StartAsyncRecut(_activeOptic, MeshSurgeryManager.GetAutoApexBucket(), "hotkey");
+            if (ok) _freshCutRibs.Add(MeshSurgeryManager.RibBucket(MeshSurgeryManager.RenderRibcage()));
             _probeAfterRecutDone = false;
             PiPDisablerPlugin.Notify(ok ? Settings.L("PiP-Disabler: 구멍 다시 맞추는 중", "PiP-Disabler: redoing the hole")
                                         : Settings.L("PiP-Disabler: 구멍을 다시 자를 수 없음(로그 참고)", "PiP-Disabler: could not redo the hole (see log)"));
@@ -645,6 +657,7 @@ namespace PiPDisabler
             _autoCutRibSeen = int.MinValue;
             MeshSurgeryManager.CancelAsyncRecut("scope exit");
             _probeAfterRecutDone = false;
+            _freshCutRibs.Clear();
         }
 
         /// <summary>Exit and re-enter the current scope so changed settings take effect now.</summary>
@@ -1184,9 +1197,17 @@ namespace PiPDisabler
             if (Time.realtimeSinceStartup < _enterRetryAfter)
                 return;
 
+            _enterSw.Reset(); _enterSw.Start();
+            _enterLaps.Length = 0;
+            _enterLastLap = 0;
             try
             {
                 DoScopeEnterCore();
+                _enterSw.Stop();
+                _enterTotalMs = _enterSw.Elapsed.TotalMilliseconds;
+                _enterName = _activeOptic != null ? _activeOptic.name : "?";
+                _enterWorstFrame = 0f;
+                _enterWatchUntil = Time.realtimeSinceStartup + 1.5f;
             }
             catch (Exception ex)
             {
@@ -1227,24 +1248,29 @@ namespace PiPDisabler
             // 1. Extract reticle texture BEFORE destroying lens mesh
             ReticleRenderer.ExtractReticle(os);
 
+            EnterLap("reticle");
             // 2. Hide ALL lens surfaces in the scope hierarchy (once)
             LensTransparency.HideAllLensSurfaces(os);
 
+            EnterLap("lens");
             // 2b. Collect lens renderers for the reticle stencil mask.
             var lensMaskEntries = CollectStencilEntries(os);
             ReticleRenderer.SetLensMaskEntries(lensMaskEntries);
             var occluderRenderers = LensTransparency.CollectHousingRenderers(os);
             ReticleRenderer.SetOccluderMaskRenderers(occluderRenderers);
 
+            EnterLap("masks");
             // 3. Get magnification for reticle scaling and zoom
             float mag = FovController.GetVisualMagnification();
 
             // 4. Show reticle overlay at the lens position, scaled for magnification
             ReticleRenderer.Show(os, mag);
 
+            EnterLap("reticleShow");
             // 4b. Show lens vignette + scope shadow effects
             ScopeEffectsRenderer.Show();
 
+            EnterLap("effects");
             // 5. Mesh surgery (once) — if it fails (zero entries), Tick() will retry
             _meshSurgerySuppressedByReload = false;
             if (IsReloadActive())
@@ -1260,18 +1286,51 @@ namespace PiPDisabler
                 MeshSurgeryManager.ApplyForOptic(os);
             }
 
+            EnterLap("hole");
             // 6. Swap main camera LOD/culling settings with scope camera settings
             CameraSettingsManager.ApplyForOptic(os);
 
             // 7. Capture weapon base scale/FOV BEFORE changing FOV (for weapon scaling compensation)
             Patches.WeaponScalingPatch.CaptureBaseState();
 
+            EnterLap("lod");
             // 8. Apply animated FOV zoom (uses FovAnimationDuration)
             // Reset dead-band so the initial ApplyFov always fires regardless of previous state.
             // Also clear any pending post-exit restore from a previous scope session.
             _postExitRestoreFov = 0f;
             FovController.OnModeSwitch();
             ApplyFov(true);
+            EnterLap("fov");
+        }
+
+        // ── Aim hitch timing (2.8.2): always on, logs only when aiming in was slow ──
+        // One line per slow aim: time spent in the mod's enter steps and the slowest frame in the
+        // 1.5 s after it (cuts, game's own zoom work). Answers "it stutters for 0.1 s when I aim".
+        private static readonly System.Diagnostics.Stopwatch _enterSw = new System.Diagnostics.Stopwatch();
+        private static readonly System.Text.StringBuilder _enterLaps = new System.Text.StringBuilder();
+        private static double _enterLastLap, _enterTotalMs;
+        private static float _enterWatchUntil, _enterWorstFrame;
+        private static string _enterName;
+
+        private static void EnterLap(string step)
+        {
+            double t = _enterSw.Elapsed.TotalMilliseconds;
+            double d = t - _enterLastLap;
+            _enterLastLap = t;
+            if (d >= 1.0) _enterLaps.Append(step).Append(' ').Append(d.ToString("F0")).Append("ms ");
+        }
+
+        private static void WatchEnterFrames()
+        {
+            if (_enterWatchUntil <= 0f) return;
+            float dt = Time.unscaledDeltaTime;
+            if (dt > _enterWorstFrame) _enterWorstFrame = dt;
+            if (Time.realtimeSinceStartup < _enterWatchUntil) return;
+            _enterWatchUntil = 0f;
+            float worstMs = _enterWorstFrame * 1000f;
+            if (_enterTotalMs >= 15.0 || worstMs >= 60f)
+                PiPDisablerPlugin.LogSource.LogInfo(
+                    $"[AimTiming] '{_enterName}': aim setup {_enterTotalMs:F0}ms ({_enterLaps.ToString().TrimEnd()}), slowest frame in the next 1.5s {worstMs:F0}ms, {MeshSurgeryManager.GetAutoCutStatus()}");
         }
 
         private static void DoScopeExit()

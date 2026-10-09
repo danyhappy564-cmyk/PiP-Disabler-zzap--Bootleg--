@@ -42,6 +42,8 @@ namespace PiPDisabler.Patches
             SafeEnable<SpringVectorAccelerationFovScalingPatch>();
             SafeEnable<SpringComponentAccelerationFovScalingPatch>();
             SafeEnable<RecoilReturnToZeroPatch>();
+            SafeEnable<AimWalkSwayWalkPatch>();
+            SafeEnable<AimWalkSwayMotionPatch>();
             FikaCompat.Enable();
             FOVFixCompat.Enable();
             DERPCompat.Enable();

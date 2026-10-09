@@ -74,6 +74,7 @@ namespace PiPDisabler
         internal static string L(string ko, string en) => Language != null && Language.Value == SettingsLanguage.English ? en : ko;
         public static ConfigEntry<KeyCode> RecutHoleKey;
         public static ConfigEntry<bool> PrecutHeldScope;
+        public static ConfigEntry<bool> RecutEveryAim;
         public static ConfigEntry<KeyCode> SaveCustomMeshSurgerySettingsKey;
         public static ConfigEntry<KeyCode> DeleteCustomMeshSurgerySettingsKey;
         public static ConfigEntry<float> CustomPlaneOffsetMeters;
@@ -133,6 +134,7 @@ namespace PiPDisabler
         public static ConfigEntry<bool> SuppressMagnificationSwitchMovement;
         public static ConfigEntry<bool> ScaleSwayWithCameraFov;
         public static ConfigEntry<float> SwayStrength;
+        public static ConfigEntry<int> AimWalkSwayReduction;
         public static ConfigEntry<bool> ForceRecoilReturnToZero;
         // --- Debug ---
         public static ConfigEntry<bool> DebugLogging;
@@ -253,6 +255,11 @@ namespace PiPDisabler
                     "While aiming: redo the automatic hole for the current view now (if something looks cut wrong).",
                     null,
                     new ConfigurationManagerAttributes { IsAdvanced = false })));
+            ConfigEntries.Add(RecutEveryAim = config.Bind("General", "Re-cut Hole Every Aim", true,
+                new ConfigDescription(
+                    "Does what the re-cut key does on every aim: once the view settles (~0.6 s), the hole is cut again in the background for the current view, so a cut that came out wrong (e.g. after restarting the game) fixes itself. Once per zoom level per aim.",
+                    null,
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(HoleOffAxisMargin = config.Bind("General", "Hole Off-axis Margin (mm)", 4f,
                 new ConfigDescription(
                     "When firing or moving the weapon shifts a few mm off the eyepiece axis and the scope's inside can show at the lens edge. The automatic hole is cut this much wider for that, never past the eyepiece housing's outline. 0 = off.",
@@ -288,6 +295,11 @@ namespace PiPDisabler
                     "Changes the intensity of the sway reduction.",
                     new AcceptableValueRange<float>(0f, 1f),
                     new ConfigurationManagerAttributes { IsAdvanced = true, ShowRangeAsPercent = true })));
+            ConfigEntries.Add(AimWalkSwayReduction = config.Bind("Hacks", "Aim Walk Sway Reduction (%)", 0,
+                new ConfigDescription(
+                    "While aiming a scope: reduces the weapon/camera bobbing from walking and moving by this percent (helps with motion sickness at high zoom). 0 = vanilla, 100 = no walk bob.",
+                    new AcceptableValueRange<int>(0, 100),
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(ManualWeaponScale = config.Bind("Hacks", "Manual Weapon Scale", 1f, //To remove
                 new ConfigDescription(
                     "Direct ribcage compensation scale while scoped. Higher values make the weapon appear smaller.",
