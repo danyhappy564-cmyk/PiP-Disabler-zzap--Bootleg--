@@ -139,6 +139,23 @@ namespace PiPDisabler.Patches
                 _maskField.SetValue(null, _sourceMask);
         }
 
+        // 2.8.3 diagnosis ("circle off-centre after switching PiP off and on"): one line whenever
+        // COTI hands us a host with different circle values, with the aim state at that moment.
+        private static string _lastSourceLog;
+        private static void LogSourceChange(object source)
+        {
+            try
+            {
+                string line = $"cx={(float)_centerX.GetValue(source):F3} cy={(float)_centerY.GetValue(source):F3} r={(float)_radius.GetValue(source):F3}";
+                if (line == _lastSourceLog) return;
+                _lastSourceLog = line;
+                PiPDisablerPlugin.LogSource.LogInfo(
+                    $"[CotiCompat] COTI circle source {line} ({source.GetType().Name}), mod {(Settings.ModEnabled.Value ? "on" : "off")}, " +
+                    $"aiming={ScopeLifecycle.IsScoped}, PiP for this scope={ScopeLifecycle.IsModBypassedForCurrentScope}");
+            }
+            catch { }
+        }
+
         private static void PrepareCentered(object host, int width, int height)
         {
             object source = ReferenceEquals(host, _centeredHost) ? _sourceHost : host;
@@ -154,6 +171,7 @@ namespace PiPDisabler.Patches
             {
                 _sourceHost = source;
                 _centeredHost = _memberwiseClone.Invoke(source, null);
+                LogSourceChange(source);
             }
 
             // Re-read periodically: COTI's mask tuner can change the source while in raid.

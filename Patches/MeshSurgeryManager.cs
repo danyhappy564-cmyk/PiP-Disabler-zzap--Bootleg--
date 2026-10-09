@@ -262,6 +262,21 @@ namespace PiPDisabler
             var weaponRoot = weaponRootTf != null ? weaponRootTf.gameObject : null;
             if (weapon == null || weaponRoot == null) return null;
 
+            // During a weapon switch the hands already hold the new gun while the scope found may
+            // still be the old gun's. Filing that scope under the new gun's id mixed the two guns'
+            // cuts (2.8.3: switching back to a gun showed its uncut scope body for ~1 s).
+            try
+            {
+                var heldPrefab = fc.ControllerGameObject != null ? fc.ControllerGameObject.GetComponent<WeaponPrefab>() : null;
+                var scopePrefab = weaponRootTf.GetComponentInParent<WeaponPrefab>();
+                if (heldPrefab != null && scopePrefab != null && !ReferenceEquals(heldPrefab, scopePrefab))
+                {
+                    PiPDisablerPlugin.DebugLogInfo("[MeshSurgery] Scope belongs to another gun than the one in hands (weapon switch) — skipped");
+                    return null;
+                }
+            }
+            catch { }
+
             string weaponId = !string.IsNullOrEmpty(weapon.Id) ? weapon.Id : weapon.TemplateId;
             if (!_raidCaches.TryGetValue(weaponId, out var weaponCache) || weaponCache == null)
             {
@@ -587,6 +602,22 @@ namespace PiPDisabler
             DisableLightEffectMeshesForScope(scopeRoot);
             DisableWeaponSphereObjects(scopeRoot);
 
+            // No finished cut on show (cut ahead while holding the gun, or the last cut was stopped
+            // by a weapon switch): put the most recently used stored cut on at once instead of
+            // throwing all stored cuts away and showing the uncut scope until a new one is done.
+            if (cache.Active == null || !cache.Active.Complete)
+            {
+                CutVariant best = null;
+                foreach (var v in cache.Variants)
+                    if (v.Complete && (best == null || v.LastUsed > best.LastUsed)) best = v;
+                if (best != null)
+                {
+                    ActivateVariant(cache, best);
+                    PiPDisablerPlugin.DebugLogInfo(
+                        $"[MeshSurgery] Aim: put on the stored cut for weapon stretch {Mathf.Pow(RibBucketStep, best.Rib):F2}{(best.Predicted ? " (made ahead)" : "")}");
+                }
+            }
+
             foreach (var entry in cache.Entries)
             {
                 if (entry == null || entry.Filter == null || entry.CutMesh == null)
@@ -790,7 +821,9 @@ namespace PiPDisabler
         {
             foreach (var entry in cache.Entries)
             {
-                if (entry == null || entry.CutMesh == null || string.IsNullOrEmpty(entry.FilterPath))
+                // A part with no cut yet is fine (it stays uncut until the background cut reaches it);
+                // only a part that can no longer be found means the gun changed.
+                if (entry == null || string.IsNullOrEmpty(entry.FilterPath))
                     return false;
 
                 var tf = FindRelativeTransform(weaponRoot, entry.FilterPath);

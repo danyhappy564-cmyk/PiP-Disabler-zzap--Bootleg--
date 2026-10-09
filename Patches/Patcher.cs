@@ -44,6 +44,7 @@ namespace PiPDisabler.Patches
             SafeEnable<RecoilReturnToZeroPatch>();
             SafeEnable<AimWalkSwayWalkPatch>();
             SafeEnable<AimWalkSwayMotionPatch>();
+            SafeEnable<AimHeadBobCameraPatch>();
             FikaCompat.Enable();
             FOVFixCompat.Enable();
             DERPCompat.Enable();

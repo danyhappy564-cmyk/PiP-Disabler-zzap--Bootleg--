@@ -135,6 +135,7 @@ namespace PiPDisabler
         public static ConfigEntry<bool> ScaleSwayWithCameraFov;
         public static ConfigEntry<float> SwayStrength;
         public static ConfigEntry<int> AimWalkSwayReduction;
+        public static ConfigEntry<bool> HeadBobReductionAlways;
         public static ConfigEntry<bool> ForceRecoilReturnToZero;
         // --- Debug ---
         public static ConfigEntry<bool> DebugLogging;
@@ -297,8 +298,13 @@ namespace PiPDisabler
                     new ConfigurationManagerAttributes { IsAdvanced = true, ShowRangeAsPercent = true })));
             ConfigEntries.Add(AimWalkSwayReduction = config.Bind("Hacks", "Aim Walk Sway Reduction (%)", 0,
                 new ConfigDescription(
-                    "While aiming a scope: reduces the weapon/camera bobbing from walking and moving by this percent (helps with motion sickness at high zoom). 0 = vanilla, 100 = no walk bob.",
+                    "While aiming a scope: reduces head bob — the whole screen (camera) and the weapon moving with your steps and body — by this percent (helps with motion sickness at high zoom). Goes below the game's own Head bobbing minimum. 0 = vanilla, 100 = none.",
                     new AcceptableValueRange<int>(0, 100),
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
+            ConfigEntries.Add(HeadBobReductionAlways = config.Bind("Hacks", "Head Bob Reduction Also When Not Aiming", false,
+                new ConfigDescription(
+                    "Also apply the head bob reduction above when not aiming.",
+                    null,
                     new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(ManualWeaponScale = config.Bind("Hacks", "Manual Weapon Scale", 1f, //To remove
                 new ConfigDescription(
