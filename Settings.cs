@@ -75,6 +75,7 @@ namespace PiPDisabler
         public static ConfigEntry<KeyCode> RecutHoleKey;
         public static ConfigEntry<bool> PrecutHeldScope;
         public static ConfigEntry<bool> RecutEveryAim;
+        public static ConfigEntry<bool> PixelHoleMode;
         public static ConfigEntry<KeyCode> SaveCustomMeshSurgerySettingsKey;
         public static ConfigEntry<KeyCode> DeleteCustomMeshSurgerySettingsKey;
         public static ConfigEntry<float> CustomPlaneOffsetMeters;
@@ -259,6 +260,11 @@ namespace PiPDisabler
             ConfigEntries.Add(RecutEveryAim = config.Bind("General", "Re-cut Hole Every Aim", true,
                 new ConfigDescription(
                     "Does what the re-cut key does on every aim: once the view settles (~0.6 s), the hole is cut again in the background for the current view, so a cut that came out wrong (e.g. after restarting the game) fixes itself. Once per zoom level per aim.",
+                    null,
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
+            ConfigEntries.Add(PixelHoleMode = config.Bind("General", "Pixel Hole (Experimental)", false,
+                new ConfigDescription(
+                    "Instead of cutting the scope body's meshes, hide it per pixel inside the lens circle on screen. Nothing is cut, so zooming, restarting and recoil never need a re-cut and the hole edge is the lens circle itself. Experimental: if the scope body vanishes, the sky through the lens looks wrong, or the scope edge smears when turning (TAA/DLSS/FSR), turn it off — the normal cut is used.",
                     null,
                     new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(HoleOffAxisMargin = config.Bind("General", "Hole Off-axis Margin (mm)", 4f,

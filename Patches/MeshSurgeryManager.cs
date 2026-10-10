@@ -90,6 +90,13 @@ namespace PiPDisabler
             if (os == null) return;
             EnsureRenderHook();
 
+            // Experimental pixel hole (2.8.5): nothing is cut; the body is hidden inside the lens per pixel.
+            if (PixelHole.Enabled)
+            {
+                RestoreForScope(os.transform); // original meshes back if a cut was on
+                if (PixelHole.TryBegin(os)) return;
+            }
+
             var scopeRoot = ScopeHierarchy.FindScopeRoot(os.transform);
             if (!scopeRoot) return;
 
@@ -119,6 +126,7 @@ namespace PiPDisabler
 
         public static void RestoreForScope(Transform anyTransformUnderScope)
         {
+            PixelHole.End();
             var scopeRoot = ScopeHierarchy.FindScopeRoot(anyTransformUnderScope);
             if (!scopeRoot) return;
 
@@ -136,6 +144,7 @@ namespace PiPDisabler
 
         public static void RestoreAll()
         {
+            PixelHole.End();
             _applyCache = null;
             foreach (var weaponCache in _raidCaches.Values)
             {
@@ -1291,6 +1300,7 @@ namespace PiPDisabler
                     _renderRib = CurrentRibcage();
                     _renderSampleFrame = Time.frameCount;
                 }
+                PixelHole.OnPreCullMain(c);
                 TickAsyncRecut();
                 var pending = _renderPending;
                 _renderPending = null;
@@ -1306,7 +1316,7 @@ namespace PiPDisabler
         // ── Pre-cut (2.7.9): cut the held weapon's scope before the first aim ──
         internal static void PrecutForOptic(OpticSight os)
         {
-            if (os == null || !PerScopeMeshSurgerySettings.IsAutoCut() || _recut != null || _jobQueue.Count > 0) return;
+            if (os == null || PixelHole.Enabled || !PerScopeMeshSurgerySettings.IsAutoCut() || _recut != null || _jobQueue.Count > 0) return;
             var scopeRoot = ScopeHierarchy.FindScopeRoot(os.transform);
             if (!scopeRoot) return;
             var activeMode = ResolveActiveMode(os, scopeRoot);
@@ -1319,6 +1329,8 @@ namespace PiPDisabler
         /// <summary>One-line state for the F12 status panel.</summary>
         internal static string GetAutoCutStatus()
         {
+            if (PixelHole.Active)
+                return Settings.L("구멍: 화면 픽셀로 지우는 중(실험) — 자르기 없음", "Hole: hidden per pixel (experimental) — no cutting");
             var c = _currentWeaponCache;
             int stored = 0;
             if (c != null) foreach (var v in c.Variants) if (v.Complete) stored++;
@@ -1740,6 +1752,21 @@ namespace PiPDisabler
                 PerScopeMeshSurgerySettings.GetPlane4Position().ToString("F4"),
                 PerScopeMeshSurgerySettings.GetPlane4Radius().ToString("F4"),
             });
+        }
+
+        internal static Transform ResolveActiveModeFor(OpticSight os, Transform scopeRoot) => ResolveActiveMode(os, scopeRoot);
+
+        /// <summary>Hide the scope's glow/sphere objects (as a cut does) — used by the pixel hole.</summary>
+        internal static void DisableScopeExtras(Transform scopeRoot)
+        {
+            DisableLightEffectMeshesForScope(scopeRoot);
+            DisableWeaponSphereObjects(scopeRoot);
+        }
+
+        internal static void RestoreScopeExtras(Transform weaponRoot)
+        {
+            RestoreLightEffectMeshesUnderRoot(weaponRoot);
+            RestoreWeaponSphereObjectsUnderRoot(weaponRoot);
         }
 
         internal static Transform FindWeaponTransform(Transform scopeRoot)
