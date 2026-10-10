@@ -22,7 +22,11 @@ namespace PiPDisabler
     internal static class PixelHole
     {
         private const int RimSegments = 128;
-        private const float DiskDepthOfFar = 0.9995f;
+        // Disk depth in normalised device coordinates (OpenGL style, far plane = 1). Just short of the
+        // far plane with a margin far above float rounding (the old disk at 0.9995 × far sat ~1e-9 from
+        // the far plane in device depth — below float precision, so it could be clipped), yet still
+        // farther than any world geometry within kilometres.
+        private const float DiskNdcZ = 0.999995f;
 
         private static OpticSight _os;
         private static Transform _scopeRoot, _weaponRoot;
@@ -104,7 +108,7 @@ namespace PiPDisabler
                 MeshSurgeryManager.DisableScopeExtras(scopeRoot);
                 MeshSurgeryManager.EnsureRenderHook();
                 PiPDisablerPlugin.LogSource.LogInfo(
-                    $"[PixelHole] On for '{os.name}': lens r={lensR * 1000f:F1}mm, hole r={_holeR * 1000f:F1}mm, {_candidates.Count} weapon parts checked per frame, camera far={cam.farClipPlane:F0}m");
+                    $"[PixelHole] On for '{os.name}': lens r={lensR * 1000f:F1}mm, hole r={_holeR * 1000f:F1}mm, {_candidates.Count} weapon parts checked per frame, camera far={cam.farClipPlane:F0}m (projection far {ProjectionFar(cam)}){OtherBuffers(cam)}");
                 return true;
             }
             catch (Exception ex)
@@ -113,6 +117,24 @@ namespace PiPDisabler
                 End();
                 return false;
             }
+        }
+
+        // Far distance actually in the projection matrix (EFT may set its own matrix).
+        private static string ProjectionFar(Camera c)
+        {
+            var m = c.projectionMatrix;
+            float d = m.m22 + 1f;
+            return Mathf.Abs(d) < 1e-7f ? "infinite" : (m.m23 / d).ToString("F0") + "m";
+        }
+
+        // Other command buffers around the G-buffer pass (for diagnosing raid-only differences).
+        private static string OtherBuffers(Camera c)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var ev in new[] { CameraEvent.BeforeGBuffer, CameraEvent.AfterGBuffer })
+                foreach (var b in c.GetCommandBuffers(ev))
+                    if (b != _cb) sb.Append(sb.Length == 0 ? "; other buffers: " : ", ").Append(ev).Append('=').Append(b.name);
+            return sb.ToString();
         }
 
         internal static void End()
@@ -171,21 +193,25 @@ namespace PiPDisabler
                 return; // lens not in front of the camera (aim animation): nothing to hide
             }
 
-            // Lens circle (on the lens plane) seen from the camera, pushed out to just short of the far plane.
+            // Lens circle (on the lens plane) on screen. The disk is given straight in device coordinates
+            // with depth fixed at the far plane, drawn through the inverse view-projection: it no longer
+            // depends on the camera's far distance (2.8.6: at far=10000m in raid the old disk placed at
+            // 0.9995 × far did not land on screen and the hole stayed black — the scope's inside showed).
             Vector3 u = Vector3.Cross(n, Mathf.Abs(Vector3.Dot(n, Vector3.up)) > 0.9f ? Vector3.right : Vector3.up).normalized;
             Vector3 v = Vector3.Cross(n, u);
-            float far = c.farClipPlane * DiskDepthOfFar;
+            Matrix4x4 vp = c.projectionMatrix * c.worldToCameraMatrix;
             Vector2 sc = c.WorldToScreenPoint(p);
             float rPx = 0f;
-            _diskVerts[0] = camPos + (p - camPos) * (far / lensDepth);
+            if (!ToNdc(vp, p, out _diskVerts[0])) { RestoreMoved(); return; }
             for (int k = 0; k < RimSegments; k++)
             {
                 float a = k * (2f * Mathf.PI / RimSegments);
                 Vector3 q = p + (u * Mathf.Cos(a) + v * Mathf.Sin(a)) * _holeR;
-                Vector3 d = q - camPos;
-                float dz = Vector3.Dot(d, fwd);
-                if (dz <= c.nearClipPlane) { RestoreMoved(); return; }
-                _diskVerts[k + 1] = camPos + d * (far / dz);
+                if (Vector3.Dot(q - camPos, fwd) <= c.nearClipPlane || !ToNdc(vp, q, out _diskVerts[k + 1]))
+                {
+                    RestoreMoved();
+                    return;
+                }
                 Vector2 sq = c.WorldToScreenPoint(q);
                 rPx = Mathf.Max(rPx, (sq - sc).magnitude);
             }
@@ -226,7 +252,9 @@ namespace PiPDisabler
                     drawn++;
                 }
             }
-            _cb.DrawMesh(_disk, Matrix4x4.identity, _depthMat, 0, 0);
+            // Object matrix = inverse view-projection: the GPU's view-projection then gives back the device
+            // coordinates (with the platform's own Y flip / reversed depth applied on top).
+            _cb.DrawMesh(_disk, vp.inverse, _depthMat, 0, 0);
 
             if (!_loggedFrame)
             {
@@ -234,6 +262,14 @@ namespace PiPDisabler
                 PiPDisablerPlugin.LogSource.LogInfo(
                     $"[PixelHole] First frame: lens {rPx:F0}px on screen, {moved} parts cover it ({drawn} drawn by the mod, {forwardOnly} forward-only parts hidden while covering it)");
             }
+        }
+
+        private static bool ToNdc(Matrix4x4 vp, Vector3 w, out Vector3 ndc)
+        {
+            Vector4 h = vp * new Vector4(w.x, w.y, w.z, 1f);
+            if (h.w <= 1e-5f) { ndc = default; return false; }
+            ndc = new Vector3(h.x / h.w, h.y / h.w, DiskNdcZ);
+            return true;
         }
 
         // Screen box of the world bounds touches the circle (centre sc, radius reach px)?
