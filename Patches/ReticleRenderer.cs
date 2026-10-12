@@ -208,8 +208,6 @@ namespace PiPDisabler
                 _scopeDataTransform = os.ScopeData != null ? os.ScopeData.transform : null;
                 _zeroLocalValid = false;
                 _zeroAlignEngaged = false;
-                _stepRelValid = false;
-                _stepLocalValid = false;
 
                 EnsureMeshAndMaterial();
 
@@ -721,10 +719,13 @@ namespace PiPDisabler
 
                 _zeroedForward = bone.TransformDirection(_zeroLocal).normalized;
                 _zeroOffsetActive = true;
-                bool zeroMoved = _stepLocalValid && PreciseAngleDeg(local, _stepLastLocal) > ZeroMovedDeg;
-                _stepLastLocal = local;
-                _stepLocalValid = true;
-                return SmoothWeaponSteps(Quaternion.FromToRotation(opticForward, axis) * opticRot, zeroMoved);
+                // Follow the scope axis 1:1 (2.8.11). The 2.7.10 "weapon step" smoothing ran relative to
+                // EFT's camera, so every glitch of that camera showed in the view while it was active, and
+                // it made the view lag the breathing sway (the scope drifted off centre at high zoom). A
+                // user log (2.8.10, FOV 3.2°) showed the scope axis moving smoothly (~0.001°/frame) even
+                // while the zero stepped — only the zero direction steps, and that is already smoothed
+                // above for the reticle — while EFT's camera relative to it "jumped" ~0.084° 448 times.
+                return Quaternion.FromToRotation(opticForward, axis) * opticRot;
             }
             catch
             {
@@ -732,89 +733,10 @@ namespace PiPDisabler
             }
         }
 
-        // ── Weapon steps after a zero change (2.7.10) ──
-        // After the zero changes EFT re-aims the weapon in small jumps (log: the scope axis moved
-        // 0.075° in one frame relative to EFT's own camera, which itself moves smoothly). The
-        // "keep scope centred" camera follows the weapon exactly, so at high zoom (FOV ~6°) each
-        // jump shook the whole view. The weapon's offset from EFT's camera is therefore smoothed —
-        // only for a moment after a jump or a zero change, so normal sway is still followed 1:1.
-        private const float StepJumpDeg = 0.04f;       // one-frame move of the weapon vs camera that counts as a jump
-        private const float StepSmoothTime = 0.08f;    // glide time for such jumps
-        private const float StepWindow = 0.6f;         // keep smoothing this long after the last jump
-        // 2.8.10 (user report: with this option on, the zoomed view shook slightly while standing
-        // still, "sometimes"): Unity's Vector3.Angle cannot resolve angles below ~0.02° (acos of a
-        // float dot product), so float noise in the bone-local zero direction read as a 0.02–0.03°
-        // "zero change" on ~3 % of frames (simulated) and kept opening the window. During a window
-        // the view lags the weapon's breathing sway; at its end it snapped back (several pixels at
-        // high zoom). Quaternion.Angle has the opposite problem (reads 0 below ~0.16°), so the
-        // intended 0.04° jump test never fired. Both now use an atan2 angle; the window end eases out.
-        private const float ZeroMovedDeg = 0.01f;      // EFT zero steps are ~0.03°; float noise is ~1e-5°
-        private const float StepReleaseTime = 0.025f;  // after the window: catch up over ~2 frames, no snap
-        private const float StepCaughtUpDeg = 0.002f;
-        private static bool _stepRelValid, _stepLocalValid;
-        private static Quaternion _stepRelRaw, _stepRelSmoothed;
-        private static Vector3 _stepLastLocal;
-        private static float _stepWindowUntil;
-        private static int _stepLogLines;
-
-        private static Quaternion SmoothWeaponSteps(Quaternion target, bool zeroMoved)
-        {
-            var cam = _attachedCamera;
-            if (cam == null) return target;
-            Quaternion camBefore = cam.transform.rotation; // EFT's camera, before this override
-            Quaternion rel = Quaternion.Inverse(camBefore) * target;
-            float now = Time.realtimeSinceStartup;
-            if (!_stepRelValid)
-            {
-                _stepRelRaw = _stepRelSmoothed = rel;
-                _stepRelValid = true;
-                return target;
-            }
-            if (IsFireReloadStateActive())
-            {
-                // Recoil and reload move the weapon fast on purpose: follow 1:1.
-                _stepRelRaw = _stepRelSmoothed = rel;
-                _stepWindowUntil = 0f;
-                return target;
-            }
-            float jump = PreciseAngleDeg(rel, _stepRelRaw);
-            _stepRelRaw = rel;
-            if (jump > StepJumpDeg || zeroMoved)
-            {
-                if (now > _stepWindowUntil) _stepLogLines = 0;
-                _stepWindowUntil = now + StepWindow;
-                if (Settings.DebugLogging.Value && _stepLogLines++ < 20)
-                    PiPDisablerPlugin.LogSource.LogInfo(
-                        $"[Reticle][Zero] weapon {(zeroMoved ? "zero changed" : "jumped")} {jump:F3}° in one frame (fov {cam.fieldOfView:F1}°) — gliding over {StepSmoothTime:F2}s");
-            }
-            if (now < _stepWindowUntil)
-            {
-                float k = 1f - Mathf.Exp(-Mathf.Max(Time.unscaledDeltaTime, 0.0001f) / StepSmoothTime);
-                _stepRelSmoothed = Quaternion.Slerp(_stepRelSmoothed, rel, k);
-            }
-            else if (PreciseAngleDeg(_stepRelSmoothed, rel) > StepCaughtUpDeg)
-            {
-                float k = 1f - Mathf.Exp(-Mathf.Max(Time.unscaledDeltaTime, 0.0001f) / StepReleaseTime);
-                _stepRelSmoothed = Quaternion.Slerp(_stepRelSmoothed, rel, k);
-            }
-            else
-            {
-                _stepRelSmoothed = rel;
-            }
-            return camBefore * _stepRelSmoothed;
-        }
-
         // Angle between two directions, accurate down to float noise (Vector3.Angle bottoms out at ~0.02°).
         private static float PreciseAngleDeg(Vector3 a, Vector3 b)
             => Mathf.Atan2(Vector3.Cross(a, b).magnitude, Vector3.Dot(a, b)) * Mathf.Rad2Deg;
 
-        // Rotation angle between two orientations (Quaternion.Angle reads 0 below ~0.16°).
-        private static float PreciseAngleDeg(Quaternion a, Quaternion b)
-        {
-            Quaternion d = Quaternion.Inverse(a) * b;
-            float v = Mathf.Sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
-            return 2f * Mathf.Atan2(v, Mathf.Abs(d.w)) * Mathf.Rad2Deg;
-        }
 
         /// <summary>Clip-space position of the zeroed aim point (0,0 = screen centre).</summary>
         private static Vector2 GetZeroClipOffset(Camera cam)
