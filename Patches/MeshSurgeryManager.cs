@@ -1294,6 +1294,8 @@ namespace PiPDisabler
             _inRender = true;
             try
             {
+                // Camera turned to the scope first, so the pixel hole and measurements see the view as rendered.
+                ReticleRenderer.AlignMainCameraEarly(c);
                 if (_autoScopeRoot != null)
                 {
                     _renderEyeBucket = LiveApexBucket(c);

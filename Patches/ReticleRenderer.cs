@@ -601,6 +601,24 @@ namespace PiPDisabler
         }
 
         /// <summary>
+        /// Align the main camera now if it renders this frame, before other pre-cull work that reads its
+        /// rotation (2.8.12). The pixel hole records its lens circle in MeshSurgeryManager's pre-cull hook,
+        /// which is registered once and so always ran before this class's hook (re-registered on every
+        /// aim): the hole was placed for EFT's camera, then the view turned to the scope — the hole sat
+        /// off the lens by that angle (scope's inside showing, worst while walking) and EFT camera
+        /// glitches made it jitter. OnPreCullCallback then skips the already-done alignment.
+        /// </summary>
+        internal static void AlignMainCameraEarly(Camera cam)
+        {
+            if (cam == null || cam != _attachedCamera) return;
+            if (_cmdBuffer == null || !_settled) return;
+            if (GetActiveReticleMesh() == null || GetActiveReticleMaterial() == null) return;
+            if (_alignedFrame == Time.frameCount) return;
+            AlignCameraToScope(cam);
+            _alignedFrame = Time.frameCount;
+        }
+
+        /// <summary>
         /// Cameras parented to the main camera (e.g. COTI's clip-on thermal camera) render BEFORE it
         /// and inherit its transform. Without this they captured the main camera's pre-alignment
         /// rotation and, while zoomed, their image visibly drifted off the scene. Align the main
