@@ -1,4 +1,4 @@
-[SPT 4.1] PiP-Disabler 포팅판 v3.1 (2.8.16) — 하늘 렌즈 버그 · 줌 떨림 수정
+[SPT 4.1] PiP-Disabler 포팅판 v3.2 — 하늘 렌즈 버그 · 줌 떨림 수정
 
 ※ 원작: Fiodorwellfme 님의 PiP-Disabler (MIT) — https://github.com/Fiodorwellfme/PiP-Disabler
 ※ 비공식 포팅판입니다. 버그는 원작자분께 말고 여기 댓글로 남겨 주세요.
@@ -27,6 +27,7 @@
 ■ 설치
 
 PiP-Disabler.zip 풀어서 SPT 폴더에 덮어쓰기. 설정은 그대로 유지됩니다.
+F12 설정 창 맨 위 버전 표시도 이제 릴리즈 이름과 같은 3.2입니다(예전엔 2.8.x라 헷갈렸던 것).
 v3 전체 변경점은 이전 글 참고해 주세요.
 
 ■ 버그 제보
