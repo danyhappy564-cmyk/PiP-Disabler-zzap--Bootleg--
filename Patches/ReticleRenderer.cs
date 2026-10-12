@@ -695,7 +695,7 @@ namespace PiPDisabler
                 else
                 {
                     // Zero changing → log the next ~1.5 s frame by frame (Debug logging only).
-                    if (Settings.DebugLogging.Value && Vector3.Angle(local, _zeroLocal) > 0.02f)
+                    if (Settings.DebugLogging.Value && PreciseAngleDeg(local, _zeroLocal) > 0.02f)
                     {
                         if (Time.realtimeSinceStartup > _zeroDiagUntil) _zeroDiagLines = 0;
                         _zeroDiagUntil = Time.realtimeSinceStartup + 1.5f;
@@ -721,7 +721,7 @@ namespace PiPDisabler
 
                 _zeroedForward = bone.TransformDirection(_zeroLocal).normalized;
                 _zeroOffsetActive = true;
-                bool zeroMoved = _stepLocalValid && Vector3.Angle(local, _stepLastLocal) > 0.005f;
+                bool zeroMoved = _stepLocalValid && PreciseAngleDeg(local, _stepLastLocal) > ZeroMovedDeg;
                 _stepLastLocal = local;
                 _stepLocalValid = true;
                 return SmoothWeaponSteps(Quaternion.FromToRotation(opticForward, axis) * opticRot, zeroMoved);
@@ -741,6 +741,16 @@ namespace PiPDisabler
         private const float StepJumpDeg = 0.04f;       // one-frame move of the weapon vs camera that counts as a jump
         private const float StepSmoothTime = 0.08f;    // glide time for such jumps
         private const float StepWindow = 0.6f;         // keep smoothing this long after the last jump
+        // 2.8.10 (user report: with this option on, the zoomed view shook slightly while standing
+        // still, "sometimes"): Unity's Vector3.Angle cannot resolve angles below ~0.02° (acos of a
+        // float dot product), so float noise in the bone-local zero direction read as a 0.02–0.03°
+        // "zero change" on ~3 % of frames (simulated) and kept opening the window. During a window
+        // the view lags the weapon's breathing sway; at its end it snapped back (several pixels at
+        // high zoom). Quaternion.Angle has the opposite problem (reads 0 below ~0.16°), so the
+        // intended 0.04° jump test never fired. Both now use an atan2 angle; the window end eases out.
+        private const float ZeroMovedDeg = 0.01f;      // EFT zero steps are ~0.03°; float noise is ~1e-5°
+        private const float StepReleaseTime = 0.025f;  // after the window: catch up over ~2 frames, no snap
+        private const float StepCaughtUpDeg = 0.002f;
         private static bool _stepRelValid, _stepLocalValid;
         private static Quaternion _stepRelRaw, _stepRelSmoothed;
         private static Vector3 _stepLastLocal;
@@ -767,7 +777,7 @@ namespace PiPDisabler
                 _stepWindowUntil = 0f;
                 return target;
             }
-            float jump = Quaternion.Angle(rel, _stepRelRaw);
+            float jump = PreciseAngleDeg(rel, _stepRelRaw);
             _stepRelRaw = rel;
             if (jump > StepJumpDeg || zeroMoved)
             {
@@ -782,11 +792,28 @@ namespace PiPDisabler
                 float k = 1f - Mathf.Exp(-Mathf.Max(Time.unscaledDeltaTime, 0.0001f) / StepSmoothTime);
                 _stepRelSmoothed = Quaternion.Slerp(_stepRelSmoothed, rel, k);
             }
+            else if (PreciseAngleDeg(_stepRelSmoothed, rel) > StepCaughtUpDeg)
+            {
+                float k = 1f - Mathf.Exp(-Mathf.Max(Time.unscaledDeltaTime, 0.0001f) / StepReleaseTime);
+                _stepRelSmoothed = Quaternion.Slerp(_stepRelSmoothed, rel, k);
+            }
             else
             {
                 _stepRelSmoothed = rel;
             }
             return camBefore * _stepRelSmoothed;
+        }
+
+        // Angle between two directions, accurate down to float noise (Vector3.Angle bottoms out at ~0.02°).
+        private static float PreciseAngleDeg(Vector3 a, Vector3 b)
+            => Mathf.Atan2(Vector3.Cross(a, b).magnitude, Vector3.Dot(a, b)) * Mathf.Rad2Deg;
+
+        // Rotation angle between two orientations (Quaternion.Angle reads 0 below ~0.16°).
+        private static float PreciseAngleDeg(Quaternion a, Quaternion b)
+        {
+            Quaternion d = Quaternion.Inverse(a) * b;
+            float v = Mathf.Sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+            return 2f * Mathf.Atan2(v, Mathf.Abs(d.w)) * Mathf.Rad2Deg;
         }
 
         /// <summary>Clip-space position of the zeroed aim point (0,0 = screen centre).</summary>
