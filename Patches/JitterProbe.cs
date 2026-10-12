@@ -45,7 +45,13 @@ namespace PiPDisabler
         private static int _lastFrame = -10, _holeFrame = -10, _frames, _skipped;
         private static float _windowStart, _dtSum, _dtSum2, _dtMax, _tiltSum;
 
-        internal static void Frame(Camera cam, Quaternion eftRot, Quaternion opticRot, Vector3 zeroDir, bool fireOrReload)
+        private static int _repeats;
+        private static readonly System.Collections.Generic.Dictionary<string, int> _paths = new System.Collections.Generic.Dictionary<string, int>();
+
+        /// <summary>The alignment was asked for again in the same frame (2.8.14: only re-applied).</summary>
+        internal static void RepeatCall(float angleDeg) { _repeats++; }
+
+        internal static void Frame(Camera cam, Quaternion eftRot, Quaternion opticRot, Vector3 zeroDir, bool fireOrReload, string path)
         {
             try
             {
@@ -59,6 +65,8 @@ namespace PiPDisabler
                     if (fov >= 20f || fireOrReload) { _skipped++; return; }
                 }
                 _lastFrame = f;
+                _paths.TryGetValue(path ?? "-", out int pc);
+                _paths[path ?? "-"] = pc + 1;
 
                 float pxPerDeg = Screen.height / Mathf.Max(fov, 0.01f);
                 float pxPerRad = pxPerDeg * Mathf.Rad2Deg;
@@ -99,6 +107,13 @@ namespace PiPDisabler
             HoleSig.Add(new Vector3(sc.x, sc.y, 0f), 1f);
         }
 
+        private static string Paths()
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var kv in _paths) sb.Append(sb.Length == 0 ? "" : ",").Append(kv.Key).Append('=').Append(kv.Value);
+            return sb.ToString();
+        }
+
         private static void RestartAll()
         {
             Scene.Restart(); Roll.Restart(); Eft.Restart(); Optic.Restart();
@@ -113,9 +128,9 @@ namespace PiPDisabler
             PiPDisablerPlugin.LogSource.LogInfo(
                 $"[Jitter] keepCentered={(keep ? "on" : "off")} fov={fov:F2} frames={_frames} fps={1000f / mean:F0} dt max={_dtMax:F1}ms sd={sd:F1}ms" +
                 $" | px per frame (rms/max): scene {Scene.Text} roll {Roll.Text} eft {Eft.Text} optic {Optic.Text} axis {Axis.Text}" +
-                $" scope {Scope.Text} reticle {Reticle.Text} hole {HoleSig.Text} | zero tilt {_tiltSum / _frames:F3}° skipped {_skipped}");
+                $" scope {Scope.Text} reticle {Reticle.Text} hole {HoleSig.Text} | zero tilt {_tiltSum / _frames:F3}° skipped {_skipped} repeat calls {_repeats} paths {Paths()}");
             foreach (var s in new[] { Scene, Roll, Eft, Optic, Axis, Scope, Reticle, HoleSig }) s.Clear();
-            _frames = 0; _skipped = 0; _dtSum = _dtSum2 = _dtMax = 0f; _tiltSum = 0f;
+            _frames = 0; _skipped = 0; _repeats = 0; _paths.Clear(); _dtSum = _dtSum2 = _dtMax = 0f; _tiltSum = 0f;
         }
     }
 }

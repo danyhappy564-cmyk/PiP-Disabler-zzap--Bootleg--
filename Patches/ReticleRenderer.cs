@@ -677,16 +677,19 @@ namespace PiPDisabler
             Quaternion opticRot = swaySource.rotation;
             _zeroOffsetActive = false;
             if (!Settings.KeepScopeCenteredWithZeroing.Value)
+            {
+                AlignPath = "off";
                 return opticRot;
+            }
 
             try
             {
                 var scope = Helpers.GetLocalPlayer()?.ProceduralWeaponAnimation?.CurrentScope;
                 Transform bone = scope?.Bone;
-                if (bone == null) return opticRot;
+                if (bone == null) { AlignPath = "noBone"; return opticRot; }
 
                 Vector3 axis = bone.name == "aim_camera" ? -bone.up : -bone.forward;
-                if (axis.sqrMagnitude < 1e-6f) return opticRot;
+                if (axis.sqrMagnitude < 1e-6f) { AlignPath = "noAxis"; return opticRot; }
 
                 Vector3 opticForward = opticRot * Vector3.forward;
                 Vector3 zeroDir = _scopeDataTransform != null ? _scopeDataTransform.forward : opticForward;
@@ -699,7 +702,10 @@ namespace PiPDisabler
                         $"[Reticle][Zero] scope-axis alignment {(engage ? "ON" : "OFF")} angle={angle:F3}° frame={Time.frameCount}");
                 }
                 if (!engage)
+                {
+                    AlignPath = "notEngaged";
                     return opticRot;
+                }
 
                 Vector3 local = bone.InverseTransformDirection(zeroDir);
                 if (!_zeroLocalValid)
@@ -743,10 +749,12 @@ namespace PiPDisabler
                 // user log (2.8.10, FOV 3.2°) showed the scope axis moving smoothly (~0.001°/frame) even
                 // while the zero stepped — only the zero direction steps, and that is already smoothed
                 // above for the reticle — while EFT's camera relative to it "jumped" ~0.084° 448 times.
+                AlignPath = "corrected";
                 return Quaternion.FromToRotation(opticForward, axis) * opticRot;
             }
             catch
             {
+                AlignPath = "error";
                 return opticRot;
             }
         }
@@ -765,8 +773,26 @@ namespace PiPDisabler
             return new Vector2(vp.x * 2f - 1f, vp.y * 2f - 1f);
         }
 
+        // Result of this frame's alignment (2.8.14). [Jitter] (2.8.13) showed the alignment running twice
+        // per frame whenever this class's pre-cull hook ran before MeshSurgeryManager's (its own hook
+        // resets the "done" mark, then the early call aligned again), and the two results differed by
+        // about the zero tilt — the view and the pixel hole flicked between them (rms 10–15 px, max
+        // ~40 px at FOV 3.2°). Whatever moves between the two calls, the frame now has exactly one result:
+        // later calls in the same frame only put it back.
+        internal static string AlignPath = "-";
+        private static int _alignResultFrame = -1;
+        private static Quaternion _alignResult;
+        private static bool _alignResultZeroOffset;
+
         private static void AlignCameraToScope(Camera cam)
         {
+            if (_alignResultFrame == Time.frameCount)
+            {
+                cam.transform.rotation = _alignResult;
+                _zeroOffsetActive = _alignResultZeroOffset;
+                JitterProbe.RepeatCall(Quaternion.Angle(cam.transform.rotation, _alignResult));
+                return;
+            }
             _zeroOffsetActive = false; // set again by GetAlignmentRotation when aligning this frame
 
             // ── Camera alignment ─────────────────────────────────────────
@@ -855,8 +881,11 @@ namespace PiPDisabler
                             cam.transform.rotation = targetRotation;
                         }
                     }
+                    _alignResult = cam.transform.rotation;
+                    _alignResultZeroOffset = _zeroOffsetActive;
+                    _alignResultFrame = Time.frameCount;
                     JitterProbe.Frame(cam, eftRotation, swaySource.rotation,
-                        _zeroOffsetActive ? _zeroedForward : swaySource.forward, suppressForFireReload);
+                        _zeroOffsetActive ? _zeroedForward : swaySource.forward, suppressForFireReload, AlignPath);
                 }
             }
         }
