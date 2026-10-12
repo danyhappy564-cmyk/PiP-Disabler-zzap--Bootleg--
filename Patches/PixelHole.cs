@@ -210,6 +210,7 @@ namespace PiPDisabler
             Vector3 v = Vector3.Cross(n, u);
             Matrix4x4 vp = c.projectionMatrix * c.worldToCameraMatrix;
             Vector2 sc = c.WorldToScreenPoint(p);
+            JitterProbe.Hole(sc);
             float rPx = 0f;
             if (!ToNdc(vp, p, out _diskVerts[0])) { RestoreMoved(); return; }
             for (int k = 0; k < RimSegments; k++)

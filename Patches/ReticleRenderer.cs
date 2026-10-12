@@ -791,6 +791,7 @@ namespace PiPDisabler
                 Transform swaySource = PiPDisabler.OpticCameraTransform ?? _opticTransform;
                 if (swaySource != null)
                 {
+                    Quaternion eftRotation = cam.transform.rotation; // before the override (JitterProbe)
                     Quaternion targetRotation = GetAlignmentRotation(swaySource);
                     bool suppressForFireReload = IsFireReloadStateActive();
                     if (suppressForFireReload)
@@ -854,6 +855,8 @@ namespace PiPDisabler
                             cam.transform.rotation = targetRotation;
                         }
                     }
+                    JitterProbe.Frame(cam, eftRotation, swaySource.rotation,
+                        _zeroOffsetActive ? _zeroedForward : swaySource.forward, suppressForFireReload);
                 }
             }
         }
