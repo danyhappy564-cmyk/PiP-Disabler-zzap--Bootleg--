@@ -672,7 +672,7 @@ namespace PiPDisabler
         /// i.e. looking down the current scope bone axis (the same axis the ADS alignment gate uses),
         /// keeping the optic's roll.
         /// </summary>
-        private static Quaternion GetAlignmentRotation(Transform swaySource)
+        private static Quaternion GetAlignmentRotation(Transform swaySource, Quaternion eftRotation)
         {
             Quaternion opticRot = swaySource.rotation;
             _zeroOffsetActive = false;
@@ -750,7 +750,16 @@ namespace PiPDisabler
                 // while the zero stepped — only the zero direction steps, and that is already smoothed
                 // above for the reticle — while EFT's camera relative to it "jumped" ~0.084° 448 times.
                 AlignPath = "corrected";
-                return Quaternion.FromToRotation(opticForward, axis) * opticRot;
+                // Look down the scope axis with EFT's own camera roll (2.8.15). Built from the optic
+                // camera before (FromToRotation(opticForward, axis) * opticRot), the result flicked by up
+                // to 2× the zero tilt between frames ([Jitter] 2.8.14: scene 20 px rms / 77 px max at
+                // FOV 3.2° with one alignment per frame, while the scope axis and the optic camera were
+                // both under 1 px). The optic camera evidently takes over part of the previous frame's
+                // override (EFT updates it relative to the main camera), so using it fed the result back.
+                // The scope axis (weapon) and EFT's camera (rewritten by EFT every frame) do not.
+                Vector3 up = eftRotation * Vector3.up;
+                if (Mathf.Abs(Vector3.Dot(up, axis.normalized)) > 0.99f) up = opticRot * Vector3.up;
+                return Quaternion.LookRotation(axis, up);
             }
             catch
             {
@@ -818,7 +827,7 @@ namespace PiPDisabler
                 if (swaySource != null)
                 {
                     Quaternion eftRotation = cam.transform.rotation; // before the override (JitterProbe)
-                    Quaternion targetRotation = GetAlignmentRotation(swaySource);
+                    Quaternion targetRotation = GetAlignmentRotation(swaySource, eftRotation);
                     bool suppressForFireReload = IsFireReloadStateActive();
                     if (suppressForFireReload)
                     {
