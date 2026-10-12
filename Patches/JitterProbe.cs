@@ -4,9 +4,8 @@ using UnityEngine;
 namespace PiPDisabler
 {
     /// <summary>
-    /// Measurement build (2.8.13): how much each signal jumps per frame while aiming, in screen pixels at
-    /// the current zoom. One line every 2 s while zoomed in (FOV &lt; 20°), without needing Debug logging
-    /// (its own logging causes hitches). "Jitter" = the second difference of a signal (frame-to-frame
+    /// Diagnostic (2.8.13, Debug logging only since 2.8.16): how much each signal jumps per frame while
+    /// aiming, in screen pixels at the current zoom. One line every 2 s while zoomed in (FOV &lt; 20°). "Jitter" = the second difference of a signal (frame-to-frame
     /// change of its frame-to-frame motion): smooth sway gives ~0, a one-frame jump gives a spike.
     /// Signals: scene = final camera direction (what you see move), roll = camera roll at 500 px from the
     /// centre, eft = EFT's own camera, optic = the optic camera (what the camera follows with "Keep scope
@@ -49,10 +48,13 @@ namespace PiPDisabler
         private static readonly System.Collections.Generic.Dictionary<string, int> _paths = new System.Collections.Generic.Dictionary<string, int>();
 
         /// <summary>The alignment was asked for again in the same frame (2.8.14: only re-applied).</summary>
-        internal static void RepeatCall(float angleDeg) { _repeats++; }
+        internal static void RepeatCall(float angleDeg) { if (On) _repeats++; }
+
+        private static bool On => Settings.DebugLogging != null && Settings.DebugLogging.Value;
 
         internal static void Frame(Camera cam, Quaternion eftRot, Quaternion opticRot, Vector3 zeroDir, bool fireOrReload, string path)
         {
+            if (!On) return;
             try
             {
                 if (cam == null) return;
@@ -101,6 +103,7 @@ namespace PiPDisabler
 
         internal static void Hole(Vector2 sc)
         {
+            if (!On) return;
             int f = Time.frameCount;
             if (f != _holeFrame + 1) HoleSig.Restart();
             _holeFrame = f;
