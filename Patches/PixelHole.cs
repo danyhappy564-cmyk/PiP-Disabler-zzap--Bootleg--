@@ -37,6 +37,13 @@ namespace PiPDisabler
         private static Camera _cam;
         private static CommandBuffer _cb;
         private static Material _depthMat;
+        // Black G-buffer surface for the circle (2.8.9): albedo, specular and emission 0, drawn after the
+        // depth reset with the far depth. Without it the G-buffer inside the circle kept the scope body:
+        // where no world geometry covers it (sky) the body was lit and the sky, which EFT blends on top,
+        // let it show through faintly. -1 = no usable shader (only the depth reset is drawn).
+        private static Material _blackMat;
+        private static int _blackPass = -1;
+        private static string _blackShader = "none";
         private static Mesh _disk;
         private static readonly Vector3[] _diskVerts = new Vector3[RimSegments + 1];
         private static readonly List<Renderer> _candidates = new List<Renderer>(64);
@@ -258,13 +265,14 @@ namespace PiPDisabler
             // platform's Y flip / reversed depth on top), then give the G-buffer pass the camera's back.
             _cb.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
             _cb.DrawMesh(_disk, Matrix4x4.identity, _depthMat, 0, 0);
+            if (_blackPass >= 0) _cb.DrawMesh(_disk, Matrix4x4.identity, _blackMat, 1, _blackPass);
             _cb.SetViewProjectionMatrices(c.worldToCameraMatrix, c.projectionMatrix);
 
             if (!_loggedFrame)
             {
                 _loggedFrame = true;
                 PiPDisablerPlugin.LogSource.LogInfo(
-                    $"[PixelHole] First frame: lens {rPx:F0}px on screen, {moved} parts cover it ({drawn} drawn by the mod, {forwardOnly} forward-only parts hidden while covering it)");
+                    $"[PixelHole] First frame: lens {rPx:F0}px on screen, {moved} parts cover it ({drawn} drawn by the mod, {forwardOnly} forward-only parts hidden while covering it), black surface shader: {_blackShader}");
             }
         }
 
@@ -336,6 +344,7 @@ namespace PiPDisabler
                 _depthMat.SetInt("_Cull", (int)CullMode.Off);
                 _depthMat.SetInt("_ZWrite", 1);
                 _depthMat.SetInt("_ZTest", (int)CompareFunction.Always);
+                CreateBlackMaterial();
             }
             if (_disk == null)
             {
@@ -349,9 +358,49 @@ namespace PiPDisabler
                     tris[k * 3 + 1] = 1 + k;
                     tris[k * 3 + 2] = 1 + (k + 1) % RimSegments;
                 }
-                _disk.triangles = tris;
+                // Submesh 0: depth reset (cull off). Submesh 1: both windings, for the black surface whose
+                // shader culls back faces (the on-screen winding depends on the lens plane / Y flip).
+                var both = new int[RimSegments * 6];
+                for (int k = 0; k < RimSegments; k++)
+                {
+                    both[k * 6] = 0; both[k * 6 + 1] = 1 + k; both[k * 6 + 2] = 1 + (k + 1) % RimSegments;
+                    both[k * 6 + 3] = 0; both[k * 6 + 4] = 1 + (k + 1) % RimSegments; both[k * 6 + 5] = 1 + k;
+                }
+                _disk.subMeshCount = 2;
+                _disk.SetTriangles(tris, 0);
+                _disk.SetTriangles(both, 1);
+                // Valid normals (a zero normal would give NaN in lighting); the surface is black anyway.
+                var normals = new Vector3[RimSegments + 1];
+                for (int i = 0; i < normals.Length; i++) normals[i] = Vector3.back;
+                _disk.normals = normals;
             }
             return true;
+        }
+
+        // Built-in Standard shader's deferred pass writes all G-buffer targets (with Unity's own LDR/HDR
+        // light-buffer encoding). Specular setup with black specular = no reflections either; the metallic
+        // Standard (dielectric 4 % specular) is the fallback. Missing shader → depth reset only.
+        private static void CreateBlackMaterial()
+        {
+            foreach (var name in new[] { "Standard (Specular setup)", "Standard" })
+            {
+                var sh = Shader.Find(name);
+                if (sh == null) continue;
+                var m = new Material(sh) { name = "PiPDisabler PixelHole black", hideFlags = HideFlags.HideAndDontSave };
+                m.SetColor("_Color", Color.black);
+                m.SetColor("_SpecColor", Color.black);
+                m.SetFloat("_Metallic", 0f);
+                m.SetFloat("_Glossiness", 0f);
+                m.SetColor("_EmissionColor", Color.black);
+                m.DisableKeyword("_EMISSION");
+                int pass = FindDeferredPass(m);
+                if (pass < 0) { UnityEngine.Object.Destroy(m); continue; }
+                _blackMat = m;
+                _blackPass = pass;
+                _blackShader = name;
+                return;
+            }
+            PiPDisablerPlugin.LogSource.LogWarning("[PixelHole] No Standard shader with a deferred pass — the sky may show the scope's inside faintly through the lens");
         }
 
         private static void Fail(string why)
