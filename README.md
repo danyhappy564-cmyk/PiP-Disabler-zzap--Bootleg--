@@ -4,10 +4,10 @@
 
 ### ⚠️ IMPORTANT NOTICE / DISCLAIMER
 
-**Original Author:** Fiodorwellfme (Fiodor)
-**Original Repository:** PiP-Disabler
-**Original Link:** https://github.com/Fiodorwellfme/PiP-Disabler
-**License notation:** MIT License — Copyright (c) 2026 Fiodorwellfme (see `LICENSE`)
+- **Original Author:** Fiodorwellfme (Fiodor)
+- **Original Repository:** PiP-Disabler
+- **Original Link:** https://github.com/Fiodorwellfme/PiP-Disabler
+- **License:** MIT License — Copyright (c) 2026 Fiodorwellfme (see `LICENSE`)
 
 1. **Reflection & Take-Downs:** I deeply reflect on the ECOT incident. As an AI-assisted "vibe coder," I will immediately delete files if the original authors ask.
 2. **No Re-Distribution:** These ported builds are unverified, temporary fixes. Please do NOT re-upload or share them anywhere else.
@@ -19,6 +19,7 @@
 
 ## 변경 이력
 
+- 2026-10-13 04:36 — README 맨 위 원작자 표기를 한 줄씩 나눠 보기 쉽게 정리 (내용 변화 없음)
 - 2026-10-13 03:33 — **릴리즈 이름 v3.1 → v3.2로 변경, 모드 버전도 `3.2`로 통일**(헷갈림 방지). F12 설정 창 맨 위 버전 표시가 이제 릴리즈 이름과 같은 `PiP-Disabler 3.2`입니다(이전엔 2.8.x). 릴리즈 노트 파일도 `release-notes/v3.2.md`(GitHub), `release-notes/v3.2-arca.txt`(아카라이브)로 이름과 내용을 바꿨습니다. 기능 변경 없음, 빌드 확인(오류 0·경고 0).
 - 2026-10-13 03:31 — **2.8.16 = 릴리즈 v3.1**: 2.8.15로 줌 떨림이 **해결 확인**됨(측정: 화면 튐 = 총 자체 움직임 수준 약 1px). `[Jitter]` 진단 기록은 이제 `자세한 기록 남기기`를 켰을 때만 남깁니다. 릴리즈 노트 `release-notes/v2.8.16.md`(GitHub), `release-notes/v2.8.16-arca.txt`(아카라이브) — 2.8.9용으로 만들었던 노트를 하늘 렌즈 버그 + 줌 떨림 수정 내용으로 바꿨습니다. 빌드 확인(오류 0·경고 0).
 - 2026-10-13 03:23 — **2.8.15**: 줌 미세 떨림 수정 2차(측정 기록 기반, 미검증).
