@@ -13,7 +13,7 @@ namespace PiPDisabler
     ///
     /// EFT renders the main camera deferred. A command buffer at BeforeGBuffer draws the weapon parts
     /// that cover the lens (with their own materials, deferred pass) and then a disk over the lens
-    /// circle that only writes depth = "very far" (no colour). The normal G-buffer pass runs after it:
+    /// circle that only writes depth = far plane (no colour). The normal G-buffer pass runs after it:
     /// inside the circle the world now passes the depth test and overwrites the scope body, outside
     /// it the body stays in front. The world's depth stays its own, so lighting, fog and smoke are
     /// unchanged. Those parts are set to ShadowsOnly meanwhile (not drawn twice, still cast shadows).
@@ -22,11 +22,13 @@ namespace PiPDisabler
     internal static class PixelHole
     {
         private const int RimSegments = 128;
-        // Disk depth in normalised device coordinates (OpenGL style, far plane = 1). Just short of the
-        // far plane with a margin far above float rounding (the old disk at 0.9995 × far sat ~1e-9 from
-        // the far plane in device depth — below float precision, so it could be clipped), yet still
-        // farther than any world geometry within kilometres.
-        private const float DiskNdcZ = 0.999995f;
+        // Disk depth in normalised device coordinates (OpenGL style): exactly the far plane, the same depth
+        // a pixel has where nothing was drawn. 2.8.6 used 0.999995 (~5-7 km at far 10000), which is in
+        // front of the sky dome (TOD puts it at ~0.95 × far): the sky failed its depth test inside the
+        // lens and the scope's inside showed when aiming at the sky (2.8.8). The disk is drawn with
+        // identity matrices, so the value reaches the GPU exactly (no round trip through the camera
+        // matrices that could push it past the far plane and clip it).
+        private const float DiskNdcZ = 1f;
 
         private static OpticSight _os;
         private static Transform _scopeRoot, _weaponRoot;
@@ -194,7 +196,7 @@ namespace PiPDisabler
             }
 
             // Lens circle (on the lens plane) on screen. The disk is given straight in device coordinates
-            // with depth fixed at the far plane, drawn through the inverse view-projection: it no longer
+            // with depth fixed at the far plane, drawn with identity matrices: it no longer
             // depends on the camera's far distance (2.8.6: at far=10000m in raid the old disk placed at
             // 0.9995 × far did not land on screen and the hole stayed black — the scope's inside showed).
             Vector3 u = Vector3.Cross(n, Mathf.Abs(Vector3.Dot(n, Vector3.up)) > 0.9f ? Vector3.right : Vector3.up).normalized;
@@ -252,9 +254,11 @@ namespace PiPDisabler
                     drawn++;
                 }
             }
-            // Object matrix = inverse view-projection: the GPU's view-projection then gives back the device
-            // coordinates (with the platform's own Y flip / reversed depth applied on top).
-            _cb.DrawMesh(_disk, vp.inverse, _depthMat, 0, 0);
+            // Disk vertices are device coordinates: draw with identity matrices (Unity still applies the
+            // platform's Y flip / reversed depth on top), then give the G-buffer pass the camera's back.
+            _cb.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
+            _cb.DrawMesh(_disk, Matrix4x4.identity, _depthMat, 0, 0);
+            _cb.SetViewProjectionMatrices(c.worldToCameraMatrix, c.projectionMatrix);
 
             if (!_loggedFrame)
             {
