@@ -51,14 +51,6 @@ namespace PiPDisabler
             Settings.ScopeWhitelistNames.SettingChanged += OnWhitelistSettingsChanged;
         }
 
-        private void Start()
-        {
-            // COTI 3.4.2+ soft-depends on this mod and loads after it (a dependency back on COTI
-            // would be cyclic and stop BepInEx loading every plugin), so COTI is only in the
-            // chainloader once every plugin's Awake has run.
-            Patches.CotiCompat.Enable();
-        }
-
         private void OnApplicationQuit()
         {
             PerScopeMeshSurgerySettings.FlushPendingWrite();

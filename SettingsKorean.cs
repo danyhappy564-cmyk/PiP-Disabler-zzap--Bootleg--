@@ -21,9 +21,8 @@ namespace PiPDisabler
         private const string CatPerScope = "3. 스코프별 설정 (조준 중인 스코프)";
         private const string CatMotion = "4. 총 움직임";
         private const string CatGraphics = "5. 그래픽";
-        private const string CatCompat = "6. 다른 모드 호환";
-        private const string CatMesh = "7. 스코프 몸통 구멍 (기본값)";
-        private const string CatDebug = "8. 문제 확인용";
+        private const string CatMesh = "6. 스코프 몸통 구멍 (기본값)";
+        private const string CatDebug = "7. 문제 확인용";
 
         private struct Text
         {
@@ -216,15 +215,7 @@ namespace PiPDisabler
             [K("Graphics", "Keep scoped LOD Bias until inventory is opened")] = new Text(CatGraphics, "조준 풀어도 멀리 디테일 유지",
                 "조준을 풀어도 인벤토리를 열 때까지 멀리 있는 물체를 자세히 그립니다. 조준할 때마다 멀리 물체가 바뀌어 보이면 켜 보세요." + Live),
 
-            // ── 6. 다른 모드 호환 ──
-            [K("Compatibility", "COTI thermal only inside lens")] = new Text(CatCompat, "COTI 열상은 렌즈 안에만",
-                "COTI(클립온 열상 모드)를 쓸 때 열상이 스코프 렌즈 안에만 보이게 합니다." + Live),
-            [K("Compatibility", "COTI thermal centred in scope")] = new Text(CatCompat, "COTI 열상 원을 스코프 가운데로",
-                "COTI 열상의 동그란 화면을 스코프 가운데에 맞춥니다. 위 설정이 켜져 있어야 합니다." + Live),
-            [K("Compatibility", "COTI lens-only flip Y")] = new Text(CatCompat, "COTI - 렌즈 바깥 위아래 뒤집기",
-                "COTI를 켰을 때 렌즈 바깥 화면이 위아래로 뒤집혀 보이면 켜세요." + Live + Rarely),
-
-            // ── 7. (hidden) global hole defaults ──
+            // ── 6. (hidden) global hole defaults ──
             [K("Global Mesh Surgery settings", "PlaneOffsetMeters")] = new Text(CatMesh, "미세 조정1", ""),
             [K("Global Mesh Surgery settings", "Plane1Radius")] = new Text(CatMesh, "눈 쪽 크기", ""),
             [K("Global Mesh Surgery settings", "Plane1OffsetMeters")] = new Text(CatMesh, "미세 조정2", ""),
@@ -245,7 +236,7 @@ namespace PiPDisabler
             [K("Global Mesh Surgery settings", "Mesh Reticle Minimum Stroke Enabled")] = new Text(CatMesh, "입체 조준선 최소 두께 보장", ""),
             [K("Global Mesh Surgery settings", "Mesh Reticle Minimum Stroke Pixels")] = new Text(CatMesh, "입체 조준선 최소 두께", ""),
 
-            // ── 8. 문제 확인용 ──
+            // ── 7. 문제 확인용 ──
             [K("Debug", "Debug logging")] = new Text(CatDebug, "자세한 기록 남기기",
                 "문제를 알려줄 때 켜고, 게임 후 BepInEx\\LogOutput.log 파일을 보내 주세요." + Live),
             [K("Debug", "DebugShowHousingMask")] = new Text(CatDebug, "렌즈 영역을 빨갛게 표시",
