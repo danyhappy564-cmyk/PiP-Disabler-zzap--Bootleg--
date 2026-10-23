@@ -12,12 +12,11 @@ namespace PiPDisabler
     [BepInPlugin("com.fiodor.pipdisabler", "PiP-Disabler", PluginVersion)]
     [BepInDependency("com.fontaine.fovfix", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("com.Shibatsu.DynamicExternalResolution", BepInDependency.DependencyFlags.SoftDependency)]
-    [BepInDependency("com.lennoxp90.coti", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("7Bpencil.MagicOpticMount", BepInDependency.DependencyFlags.SoftDependency)]
 
     public sealed class PiPDisablerPlugin : BaseUnityPlugin
     {
-        public const string PluginVersion = "3.3";
+        public const string PluginVersion = "3.4";
 
         public static ManualLogSource LogSource;
         internal static PiPDisablerPlugin Instance;
@@ -52,7 +51,14 @@ namespace PiPDisabler
             Settings.ScopeWhitelistNames.SettingChanged += OnWhitelistSettingsChanged;
         }
 
-              
+        private void Start()
+        {
+            // COTI 3.4.2+ soft-depends on this mod and loads after it (a dependency back on COTI
+            // would be cyclic and stop BepInEx loading every plugin), so COTI is only in the
+            // chainloader once every plugin's Awake has run.
+            Patches.CotiCompat.Enable();
+        }
+
         private void OnApplicationQuit()
         {
             PerScopeMeshSurgerySettings.FlushPendingWrite();

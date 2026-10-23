@@ -48,7 +48,6 @@ namespace PiPDisabler.Patches
             FikaCompat.Enable();
             FOVFixCompat.Enable();
             DERPCompat.Enable();
-            CotiCompat.Enable();
 
         }
 
