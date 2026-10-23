@@ -304,6 +304,13 @@ namespace PiPDisabler
                     goto evaluate;
                 }
 
+                if (Patches.StanceOverhaulCompat.IsStanceOverhaulTransitioning(player))
+                {
+                    ArmPostSprintAimGate();
+                    reason = "Stance Overhaul transition";
+                    goto evaluate;
+                }
+
                 bool isAiming = _getIsAiming(pwa);
                 if (!isAiming) { reason = "not aiming"; goto evaluate; }
 
