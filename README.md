@@ -1,3 +1,8 @@
+<p align="center">
+  <a href="README.md"><img alt="한국어 (현재 문서)" src="https://img.shields.io/badge/%ED%95%9C%EA%B5%AD%EC%96%B4-%ED%98%84%EC%9E%AC%20%EB%AC%B8%EC%84%9C-1f6feb?style=for-the-badge"></a>
+  <a href="README.en.md"><img alt="English" src="https://img.shields.io/badge/English-Read%20in%20English-6e7681?style=for-the-badge"></a>
+</p>
+
 # PiP-Disabler-zzap--Bootleg- (SPT 4.1 포팅)
 
 ---
@@ -19,9 +24,7 @@
 
 ## 변경 이력
 
-- 2026-10-23 13:17 — **릴리즈 v3.4** — 모드 버전 `3.4`(F12 설정 창 맨 위 표시도 `PiP-Disabler 3.4`). v3.3 이후 바뀐 것은 COTI 관련 2건(아래 10-23 12:57·13:11 항목): COTI 3.4.2와 같이 넣으면 모드 전체가 안 불러와지던 문제 수정, COTI 전용 처리 제거(COTI 쪽에 맡김). 릴리즈 노트 `release-notes/v3.4.md`(GitHub)·`v3.4-arca.txt`(아카라이브)·`v3.4-discord.md`(디스코드). 빌드 확인(오류 0·경고 0, zip 단계는 사용자 PC에서).
-
-전체 변경 이력 72개는 [`changelog/`](changelog/) 폴더에 10개씩 나눠 있습니다 (번호가 클수록 최신, 지금 마지막 파일: [`CHANGELOG-008.md`](changelog/CHANGELOG-008.md)).
+전체 변경 이력 72개는 [`changelog/`](changelog/) 폴더에 10개씩 나눠 있습니다 (번호가 클수록 최신, 최신 파일: [`CHANGELOG-008.md`](changelog/CHANGELOG-008.md)). 릴리즈별 요약은 [Releases](../../releases).
 
 ## 이 모드가 하는 일
 
