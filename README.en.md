@@ -24,7 +24,7 @@
 
 ## Changelog
 
-The full changelog (72 entries) is in the [`changelog/`](changelog/) folder, 10 per file (higher number = newer, latest: [`CHANGELOG-008.md`](changelog/CHANGELOG-008.md)). Per-release summaries: [Releases](../../releases).
+The full changelog (73 entries) is in the [`changelog/`](changelog/) folder, 10 per file (higher number = newer, latest: [`CHANGELOG-008.md`](changelog/CHANGELOG-008.md)). Per-release summaries: [Releases](../../releases).
 
 ## What this mod does
 
@@ -40,6 +40,8 @@ The following scopes are automatically excluded (they use the game's original re
 - Scopes with a rangefinder
 - Scopes with names listed in `Auto Bypass Name Contains` (default: `d-evo; scope_ags_npz_pag17_2,7x`)
 - Blacklisted scopes, or scopes absent from the whitelist when whitelist mode is enabled
+
+Scopes whose zoom data is not initialized wait until it is ready. This prevents repeated `ScopeZoomHandler.method_2` errors during weapon transitions while preserving native zoom calculations for initialized scopes. The validity guard remains active when PiP replacement is disabled in F12.
 
 ## Adjusting individual scopes (for example, when the gun looks too large at 20×)
 

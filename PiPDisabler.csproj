@@ -89,12 +89,7 @@
   </ItemGroup>
 
 	<Target Name="PostBuild" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
-	<MakeDir Directories="$(SPTPath)\BepInEx\plugins\$(ModName)" />
-	<Copy SourceFiles="$(TargetPath)" DestinationFolder="$(SPTPath)\BepInEx\plugins\$(ModName)" />
-	<Copy SourceFiles="$(ProjectDir)Resources\Shaders\pipdisabler_reticle_shaders.bundle" DestinationFolder="$(SPTPath)\BepInEx\plugins\$(ModName)" Condition="Exists('$(ProjectDir)Resources\Shaders\pipdisabler_reticle_shaders.bundle')" />
-	<Copy SourceFiles="$(ProjectDir)Resources\Shaders\pipdisabler_effect_shaders.bundle" DestinationFolder="$(SPTPath)\BepInEx\plugins\$(ModName)" Condition="Exists('$(ProjectDir)Resources\Shaders\pipdisabler_effect_shaders.bundle')" />
-	<!-- Per-scope settings: only copy when missing so in-game saved custom settings are never overwritten. -->
-	<Copy SourceFiles="$(ProjectDir)custom_mesh_surgery_settings.json" DestinationFolder="$(SPTPath)\BepInEx\plugins\$(ModName)" Condition="Exists('$(ProjectDir)custom_mesh_surgery_settings.json') And !Exists('$(SPTPath)\BepInEx\plugins\$(ModName)\custom_mesh_surgery_settings.json')" />
+	<!-- Build/package only. Installation is explicit after game/server shutdown and backup. -->
 
 	<RemoveDir Directories="$(PackageStagingDir)" Condition="Exists('$(PackageStagingDir)')" />
 	<MakeDir Directories="$(PackagePluginDir)" />

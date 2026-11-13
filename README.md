@@ -24,7 +24,7 @@
 
 ## 변경 이력
 
-전체 변경 이력 72개는 [`changelog/`](changelog/) 폴더에 10개씩 나눠 있습니다 (번호가 클수록 최신, 최신 파일: [`CHANGELOG-008.md`](changelog/CHANGELOG-008.md)). 릴리즈별 요약은 [Releases](../../releases).
+전체 변경 이력 73개는 [`changelog/`](changelog/) 폴더에 10개씩 나눠 있습니다 (번호가 클수록 최신, 최신 파일: [`CHANGELOG-008.md`](changelog/CHANGELOG-008.md)). 릴리즈별 요약은 [Releases](../../releases).
 
 ## 이 모드가 하는 일
 
@@ -40,6 +40,8 @@
 - 거리 측정기가 달린 스코프
 - `Auto Bypass Name Contains`에 이름이 들어간 스코프 (기본값: `d-evo; scope_ags_npz_pag17_2,7x`)
 - 블랙리스트에 넣은 스코프, 또는 화이트리스트를 쓸 때 목록에 없는 스코프
+
+줌 정보가 아직 준비되지 않은 스코프는 준비될 때까지 업데이트를 기다립니다. 총·칼 교체 중 발생할 수 있는 `ScopeZoomHandler.method_2` 반복 오류를 막으며, 준비된 스코프의 배율 계산은 그대로 사용합니다. 이 보호는 F12에서 PiP 대체 기능을 꺼도 유지됩니다.
 
 ## 스코프별로 맞추는 법 (예: 20배율에서 총이 너무 크게 보일 때)
 
