@@ -24,7 +24,7 @@
 
 ## Changelog
 
-The full changelog (73 entries) is in the [`changelog/`](changelog/) folder, 10 per file (higher number = newer, latest: [`CHANGELOG-008.md`](changelog/CHANGELOG-008.md)). Per-release summaries: [Releases](../../releases).
+The full changelog (74 entries) is in the [`changelog/`](changelog/) folder, 10 per file (higher number = newer, latest: [`CHANGELOG-008.md`](changelog/CHANGELOG-008.md)). Per-release summaries: [Releases](../../releases).
 
 ## What this mod does
 
@@ -74,8 +74,9 @@ dotnet build -c Release
 ```
 
 - The default SPT path is `E:\SPT 4.1`. If yours differs, specify it with `dotnet build -c Release -p:SPTPath="D:\내 SPT"`.
-- Building copies files directly to `E:\SPT 4.1\BepInEx\plugins\PiP-Disabler\` and creates `Releases\PiP-Disabler.zip`.
-- `custom_mesh_surgery_settings.json` is copied **only if it does not already exist** at the destination, to avoid overwriting per-scope settings saved in-game.
+- Release builds create `bin\Release\net472\PiP-Disabler.dll` and `Releases\PiP-Disabler.zip`. They never copy files into the game automatically.
+- Stop the game/server and back up existing files before manually installing the required output. User scope settings remain in `BepInEx\config\PiP-Disabler.scope-settings.json`.
+- The file version is 3.5.0.0 and the F12 plugin version is 3.5.
 
 ## How to report bugs
 

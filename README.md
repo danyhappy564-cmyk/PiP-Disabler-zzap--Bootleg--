@@ -24,7 +24,7 @@
 
 ## 변경 이력
 
-전체 변경 이력 73개는 [`changelog/`](changelog/) 폴더에 10개씩 나눠 있습니다 (번호가 클수록 최신, 최신 파일: [`CHANGELOG-008.md`](changelog/CHANGELOG-008.md)). 릴리즈별 요약은 [Releases](../../releases).
+전체 변경 이력 74개는 [`changelog/`](changelog/) 폴더에 10개씩 나눠 있습니다 (번호가 클수록 최신, 최신 파일: [`CHANGELOG-008.md`](changelog/CHANGELOG-008.md)). 릴리즈별 요약은 [Releases](../../releases).
 
 ## 이 모드가 하는 일
 
@@ -74,8 +74,9 @@ dotnet build -c Release
 ```
 
 - 기본 SPT 경로는 `E:\SPT 4.1`입니다. 다르면 `dotnet build -c Release -p:SPTPath="D:\내 SPT"`로 지정합니다.
-- 빌드하면 `E:\SPT 4.1\BepInEx\plugins\PiP-Disabler\`에 바로 복사되고, `Releases\PiP-Disabler.zip`이 만들어집니다.
-- `custom_mesh_surgery_settings.json`은 대상 폴더에 **없을 때만** 복사합니다. 게임에서 저장한 스코프별 설정을 덮어쓰지 않기 위해서입니다.
+- Release 빌드는 `bin\Release\net472\PiP-Disabler.dll`과 `Releases\PiP-Disabler.zip`을 만듭니다. 게임 폴더에 자동 복사하지 않습니다.
+- 설치할 때는 게임·서버를 종료하고 기존 파일을 백업한 뒤 필요한 파일만 수동 복사하십시오. 사용자 스코프 설정은 `BepInEx\config\PiP-Disabler.scope-settings.json`에 유지됩니다.
+- 파일 속성 버전은 3.5.0.0, F12 플러그인 버전은 3.5입니다.
 
 ## 버그 제보 방법
 
