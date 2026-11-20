@@ -16,7 +16,7 @@ namespace PiPDisabler
 
     public sealed class PiPDisablerPlugin : BaseUnityPlugin
     {
-        public const string PluginVersion = "3.6";
+        public const string PluginVersion = "3.7";
 
         public static ManualLogSource LogSource;
         internal static PiPDisablerPlugin Instance;
@@ -117,7 +117,7 @@ namespace PiPDisabler
 
         private void Update()
         {
-            Settings.TickLanguage();
+            Localization.Tick();
             if (Settings.ModToggleKey.Value != KeyCode.None && InputProxy.GetKeyDown(Settings.ModToggleKey.Value))
             {
                 Settings.ModEnabled.Value = !Settings.ModEnabled.Value;
@@ -145,7 +145,7 @@ namespace PiPDisabler
                 if (string.IsNullOrWhiteSpace(scopeKey))
                 {
                     DebugLogInfo("[CustomMeshSettings] Save ignored: no active scope key");
-                    Notify(Settings.L("PiP-Disabler: 스코프로 조준한 채로 눌러 주세요", "PiP-Disabler: press this while aiming a scope"));
+                    Notify(Localization.T("key.notaiming", "PiP-Disabler: press this while aiming a scope"));
                 }
                 else
                 {
@@ -153,8 +153,8 @@ namespace PiPDisabler
                     DebugLogInfo(saved
                         ? $"[CustomMeshSettings] Saved custom settings for scope key '{scopeKey}'"
                         : "[CustomMeshSettings] Save failed");
-                    Notify(saved ? Settings.L($"PiP-Disabler: '{scopeKey}' 전용 설정 저장 — 바로 적용", $"PiP-Disabler: saved settings for '{scopeKey}' — applied")
-                                 : Settings.L("PiP-Disabler: 저장 실패", "PiP-Disabler: save failed"));
+                    Notify(saved ? Localization.T("key.saved", "PiP-Disabler: saved settings for '{0}' — applied", scopeKey)
+                                 : Localization.T("key.savefail", "PiP-Disabler: save failed"));
                     if (saved) ScopeLifecycle.ReapplyCurrentScope("per-scope settings saved");
                 }
             }
@@ -165,7 +165,7 @@ namespace PiPDisabler
                 if (string.IsNullOrWhiteSpace(scopeKey))
                 {
                     DebugLogInfo("[CustomMeshSettings] Delete ignored: no active scope key");
-                    Notify(Settings.L("PiP-Disabler: 스코프로 조준한 채로 눌러 주세요", "PiP-Disabler: press this while aiming a scope"));
+                    Notify(Localization.T("key.notaiming", "PiP-Disabler: press this while aiming a scope"));
                 }
                 else
                 {
@@ -173,8 +173,8 @@ namespace PiPDisabler
                     DebugLogInfo(removed
                         ? $"[CustomMeshSettings] Deleted custom settings for scope key '{scopeKey}'"
                         : $"[CustomMeshSettings] No custom settings existed for scope key '{scopeKey}'");
-                    Notify(removed ? Settings.L($"PiP-Disabler: '{scopeKey}' 전용 설정 삭제 — 기본값으로", $"PiP-Disabler: removed settings for '{scopeKey}' — back to defaults")
-                                   : Settings.L($"PiP-Disabler: '{scopeKey}'에는 전용 설정이 없음", $"PiP-Disabler: '{scopeKey}' has no saved settings"));
+                    Notify(removed ? Localization.T("key.removed", "PiP-Disabler: removed settings for '{0}' — back to defaults", scopeKey)
+                                   : Localization.T("key.none", "PiP-Disabler: '{0}' has no saved settings", scopeKey));
                     if (removed) ScopeLifecycle.ReapplyCurrentScope("per-scope settings deleted");
                 }
             }

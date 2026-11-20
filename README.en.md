@@ -24,7 +24,7 @@
 
 ## Changelog
 
-The full changelog (75 entries) is in the [`changelog/`](changelog/) folder, 10 per file (higher number = newer, latest: [`CHANGELOG-008.md`](changelog/CHANGELOG-008.md)). Per-release summaries: [Releases](../../releases).
+The full changelog (76 entries) is in the [`changelog/`](changelog/) folder, 10 per file (higher number = newer, latest: [`CHANGELOG-008.md`](changelog/CHANGELOG-008.md)). Per-release summaries: [Releases](../../releases).
 
 ## What this mod does
 
@@ -42,6 +42,13 @@ The following scopes are automatically excluded (they use the game's original re
 - Blacklisted scopes, or scopes absent from the whitelist when whitelist mode is enabled
 
 Scopes whose zoom data is not initialized wait until it is ready. This prevents repeated `ScopeZoomHandler.method_2` errors during weapon transitions while preserving native zoom calculations for initialized scopes. The validity guard remains active when PiP replacement is disabled in F12.
+
+New in 3.7:
+
+- **Pixel Hole Hides Hands** (on by default, suggested by the original author): with the pixel hole, your own arms, gloves and watch are hidden inside the lens circle too, so a hand or sleeve never covers the view through the scope. Outside the lens they look as usual; first-person arm shadows stay off as in the game.
+- **Translations moved to files**: the Korean F12 texts and messages left the code and live in `locales\kr.json`. English is built in; anyone can add a language with a `locales\<game language code>.json` file.
+- **Settings Language values**: `Game` (default — the game language's file if there is one, English otherwise) / `English` / a file name (`kr`, ...). The 3.6 value `Korean` is gone; a cfg that still has it falls back to `Game` (Korean when the game is in Korean).
+- The same code was sent to the original author as a pull request (on top of 2.1.0).
 
 New in 3.6:
 
@@ -68,6 +75,7 @@ New in 3.6:
    - `PiP-Disabler.dll`
    - `custom_mesh_surgery_settings.json` (per-scope settings)
    - `pipdisabler_reticle_shaders.bundle`, `pipdisabler_effect_shaders.bundle`
+   - `locales\kr.json` (Korean translation, since 3.7)
 2. If you have Sierra's port or an older version, remove its DLL (the same mod must not load twice).
 3. In-game, configure it under F12 → `PiP-Disabler`.
 
@@ -82,7 +90,7 @@ dotnet build -c Release
 - The default SPT path is `E:\SPT 4.1`. If yours differs, specify it with `dotnet build -c Release -p:SPTPath="D:\내 SPT"`.
 - Release builds create `bin\Release\net472\PiP-Disabler.dll` and `Releases\PiP-Disabler.zip`. They never copy files into the game automatically.
 - Stop the game/server and back up existing files before manually installing the required output. User scope settings remain in `BepInEx\config\PiP-Disabler.scope-settings.json`.
-- The file version is 3.6.0.0 and the F12 plugin version is 3.6.
+- The file version is 3.7.0.0 and the F12 plugin version is 3.7.
 
 ## How to report bugs
 

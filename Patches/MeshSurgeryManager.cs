@@ -1333,18 +1333,18 @@ namespace PiPDisabler
         internal static string GetAutoCutStatus()
         {
             if (PixelHole.Active)
-                return Settings.L("구멍: 화면 픽셀로 지우는 중(실험) — 자르기 없음", "Hole: hidden per pixel (experimental) — no cutting");
+                return Localization.T("hole.pixel", "Hole: hidden per pixel (experimental) — no cutting");
             var c = _currentWeaponCache;
             int stored = 0;
             if (c != null) foreach (var v in c.Variants) if (v.Complete) stored++;
-            string keep = Settings.L($"배율별 보관 {stored}/{MaxVariants}", $"stored zoom cuts {stored}/{MaxVariants}");
+            string keep = Localization.T("hole.stored", "stored zoom cuts {0}/{1}", stored, MaxVariants);
             if (_recut != null)
-                return Settings.L($"구멍 자르는 중 {_recut.Done}/{_recut.Cache.Entries.Count}{(_recut.Predicted ? " (미리 자르기)" : "")} · {keep}",
-                                  $"Cutting the hole {_recut.Done}/{_recut.Cache.Entries.Count}{(_recut.Predicted ? " (ahead)" : "")} · {keep}");
-            if (c == null || !c.Built || c.Active == null) return Settings.L($"구멍: 아직 안 자름 · {keep}", $"Hole: not cut yet · {keep}");
+                return Localization.T("hole.cutting", "Cutting the hole {0}/{1}{2} · {3}", _recut.Done, _recut.Cache.Entries.Count,
+                                  _recut.Predicted ? Localization.T("hole.ahead", " (ahead)") : "", keep);
+            if (c == null || !c.Built || c.Active == null) return Localization.T("hole.notcut", "Hole: not cut yet · {0}", keep);
             float mm = DefaultApexDistance * Mathf.Pow(ApexBucketStep, c.Active.Eye) * 1000f;
             float st = Mathf.Pow(RibBucketStep, c.Active.Rib);
-            return Settings.L($"구멍: 카메라 {mm:F0}mm · 총 늘임 {st:F2} 기준 · {keep}", $"Hole: camera {mm:F0}mm · weapon stretch {st:F2} · {keep}");
+            return Localization.T("hole.cut", "Hole: camera {0:F0}mm · weapon stretch {1:F2} · {2}", mm, st, keep);
         }
 
         /// <summary>Stop background cuts: by default only the one(s) for the current view; all=true also pre-cuts.</summary>

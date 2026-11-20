@@ -66,55 +66,15 @@ namespace PiPDisabler
         public static ConfigEntry<float> CustomCutWidthMultiplier;
         public static ConfigEntry<bool> CustomCutManual;
         public static ConfigEntry<bool> AutoCutShape;
-        public static ConfigEntry<SettingsLanguage> Language;
+        public static ConfigEntry<string> Language;
         public static ConfigEntry<bool> ReticleFollowsZoom;
         public static ConfigEntry<float> HoleOffAxisMargin;
 
-        public enum SettingsLanguage { Game, Korean, English }
-
-        /// <summary>Pick the Korean or English text for user-facing messages.</summary>
-        internal static string L(string ko, string en) => IsKorean ? ko : en;
-
-        /// <summary>Korean texts? "Game" (default, 3.6) follows the game's language: Korean only when the game is set to Korean.</summary>
-        internal static bool IsKorean
-        {
-            get
-            {
-                if (Language == null) return false;
-                if (Language.Value == SettingsLanguage.Korean) return true;
-                if (Language.Value == SettingsLanguage.English) return false;
-                return GameLanguageIsKorean();
-            }
-        }
-
-        private static bool GameLanguageIsKorean()
-        {
-            try
-            {
-                if (Comfort.Common.Singleton<EFT.Settings.SettingsManager>.Instantiated)
-                    return Comfort.Common.Singleton<EFT.Settings.SettingsManager>.Instance.Game.Settings.Language.Value == "kr";
-            }
-            catch { }
-            return false;
-        }
-
-        // The game's settings are not loaded yet when the plugin starts, and the player can change the
-        // language in game: re-apply the F12 texts when the language the "Game" option resolves to changes.
-        private static bool? _appliedKorean;
-        private static float _nextLanguageCheck;
-        internal static void TickLanguage()
-        {
-            if (Language == null || Time.unscaledTime < _nextLanguageCheck) return;
-            _nextLanguageCheck = Time.unscaledTime + 2f;
-            bool ko = IsKorean;
-            if (_appliedKorean == ko) return;
-            _appliedKorean = ko;
-            SettingsKorean.Apply(ConfigEntries);
-        }
         public static ConfigEntry<KeyCode> RecutHoleKey;
         public static ConfigEntry<bool> PrecutHeldScope;
         public static ConfigEntry<bool> RecutEveryAim;
         public static ConfigEntry<bool> PixelHoleMode;
+        public static ConfigEntry<bool> PixelHoleHidesHands;
         public static ConfigEntry<KeyCode> SaveCustomMeshSurgerySettingsKey;
         public static ConfigEntry<KeyCode> DeleteCustomMeshSurgerySettingsKey;
         public static ConfigEntry<float> CustomPlaneOffsetMeters;
@@ -245,10 +205,12 @@ namespace PiPDisabler
                     "Eyepiece distance from the camera (at weapon scale 1) that every weapon is corrected to. Larger = the scope looks smaller on all weapons. Per-scope weapon scale still applies on top.",
                     new AcceptableValueRange<float>(80f, 400f),
                     new ConfigurationManagerAttributes { IsAdvanced = true })));
-            ConfigEntries.Add(Language = config.Bind("General", "Settings Language", SettingsLanguage.Game,
+            var languages = new List<string> { Localization.GameOption, Localization.EnglishOption };
+            languages.AddRange(Localization.AvailableCodes());
+            ConfigEntries.Add(Language = config.Bind("General", "Settings Language", Localization.GameOption,
                 new ConfigDescription(
-                    "Language of the F12 settings and messages. Game = follow the game's language (Korean when the game is in Korean, English otherwise); Korean / English = always that one. Close and reopen F12 after changing.",
-                    null,
+                    "Language of the F12 settings and messages. Game = follow the game's language when a translation file for it exists (BepInEx/plugins/PiP-Disabler/locales/<game language code>.json), English otherwise. English or a file name = always that one. Close and reopen F12 after changing.",
+                    new AcceptableValueList<string>(languages.ToArray()),
                     new ConfigurationManagerAttributes { IsAdvanced = false, Order = 1000 })));
             ConfigEntries.Add(ReticleFollowsZoom = config.Bind("General", "Reticle Follows Zoom Multiplier", true,
                 new ConfigDescription(
@@ -311,6 +273,11 @@ namespace PiPDisabler
             ConfigEntries.Add(PixelHoleMode = config.Bind("General", "Pixel Hole", true,
                 new ConfigDescription(
                     "Instead of cutting the scope body's meshes, hide it per pixel inside the lens circle on screen. Nothing is cut, so zooming, restarting and recoil never need a re-cut and the hole edge is the lens circle itself. On by default. If the scope body vanishes, the sky through the lens looks wrong, or the scope edge smears when turning (TAA/DLSS/FSR), turn it off — the mesh cut is used instead.",
+                    null,
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
+            ConfigEntries.Add(PixelHoleHidesHands = config.Bind("General", "Pixel Hole Hides Hands", true,
+                new ConfigDescription(
+                    "With the pixel hole: your own arms, gloves and watch are hidden inside the lens circle too, so a hand or sleeve never covers the view through the scope. Outside the lens they are drawn as usual. Turning it on takes effect on the next aim.",
                     null,
                     new ConfigurationManagerAttributes { IsAdvanced = false })));
             ConfigEntries.Add(HoleOffAxisMargin = config.Bind("General", "Hole Off-axis Margin (mm)", 4f,
@@ -777,10 +744,10 @@ namespace PiPDisabler
             MigrateOldCutDefaults();
             RegisterVisualEffectLiveUpdates();
             RegisterReapplyOnChange();
-            Language.SettingChanged += (s, e) => SettingsKorean.Apply(ConfigEntries);
+            Language.SettingChanged += (s, e) => Localization.Apply(ConfigEntries);
             NormalizeEyeDistance.SettingChanged += (s, e) => EyeDistanceNormalizer.OnSettingsChanged();
             ReferenceEyeDistanceMm.SettingChanged += (s, e) => EyeDistanceNormalizer.OnSettingsChanged();
-            SettingsKorean.Apply(ConfigEntries);
+            Localization.Apply(ConfigEntries);
             RecalcOrder();
         }
 

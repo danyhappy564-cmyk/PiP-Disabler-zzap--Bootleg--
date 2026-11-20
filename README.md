@@ -24,7 +24,7 @@
 
 ## 변경 이력
 
-전체 변경 이력 75개는 [`changelog/`](changelog/) 폴더에 10개씩 나눠 있습니다 (번호가 클수록 최신, 최신 파일: [`CHANGELOG-008.md`](changelog/CHANGELOG-008.md)). 릴리즈별 요약은 [Releases](../../releases).
+전체 변경 이력 76개는 [`changelog/`](changelog/) 폴더에 10개씩 나눠 있습니다 (번호가 클수록 최신, 최신 파일: [`CHANGELOG-008.md`](changelog/CHANGELOG-008.md)). 릴리즈별 요약은 [Releases](../../releases).
 
 ## 이 모드가 하는 일
 
@@ -42,6 +42,13 @@
 - 블랙리스트에 넣은 스코프, 또는 화이트리스트를 쓸 때 목록에 없는 스코프
 
 줌 정보가 아직 준비되지 않은 스코프는 준비될 때까지 업데이트를 기다립니다. 총·칼 교체 중 발생할 수 있는 `ScopeZoomHandler.method_2` 반복 오류를 막으며, 준비된 스코프의 배율 계산은 그대로 사용합니다. 이 보호는 F12에서 PiP 대체 기능을 꺼도 유지됩니다.
+
+3.7부터 추가된 동작입니다.
+
+- **픽셀 구멍: 손도 지우기**(기본 켬, 원작자 제안): 픽셀 구멍 방식일 때 내 팔·장갑·시계도 렌즈 원 안에서는 지웁니다. 손이나 소매가 스코프 시야를 가리지 않고, 렌즈 밖에서는 평소대로 보입니다. 1인칭 팔 그림자는 원래처럼 꺼진 채로 둡니다.
+- **번역을 파일로 분리**: F12 설정·안내 메시지의 한국어가 코드에서 빠져 `locales\kr.json`에 들어갔습니다. 영어는 모드에 내장되어 있고, 다른 언어는 `locales\<게임 언어 코드>.json` 파일을 만들면 누구나 추가할 수 있습니다.
+- **설정 언어 값 변경**: `Game`(기본, 게임 언어의 번역 파일이 있으면 그 언어, 없으면 영어) / `English` / 파일 이름(`kr` 등). 3.6의 `Korean` 값은 없어졌고, 설정 파일에 남아 있으면 `Game`으로 돌아갑니다(게임이 한국어면 그대로 한국어).
+- 원작자에게 같은 코드로 PR을 보냈습니다(원작 2.1.0 기준).
 
 3.6부터 추가된 동작입니다.
 
@@ -68,6 +75,7 @@
    - `PiP-Disabler.dll`
    - `custom_mesh_surgery_settings.json` (스코프별 설정)
    - `pipdisabler_reticle_shaders.bundle`, `pipdisabler_effect_shaders.bundle`
+   - `locales\kr.json` (한국어 번역, 3.7부터)
 2. Sierra 님 포팅판이나 예전 버전이 있으면 그 DLL은 지웁니다(같은 모드가 두 번 로드되면 안 됩니다).
 3. 게임에서 F12 → `PiP-Disabler`에서 설정합니다.
 
@@ -82,7 +90,7 @@ dotnet build -c Release
 - 기본 SPT 경로는 `E:\SPT 4.1`입니다. 다르면 `dotnet build -c Release -p:SPTPath="D:\내 SPT"`로 지정합니다.
 - Release 빌드는 `bin\Release\net472\PiP-Disabler.dll`과 `Releases\PiP-Disabler.zip`을 만듭니다. 게임 폴더에 자동 복사하지 않습니다.
 - 설치할 때는 게임·서버를 종료하고 기존 파일을 백업한 뒤 필요한 파일만 수동 복사하십시오. 사용자 스코프 설정은 `BepInEx\config\PiP-Disabler.scope-settings.json`에 유지됩니다.
-- 파일 속성 버전은 3.6.0.0, F12 플러그인 버전은 3.6입니다.
+- 파일 속성 버전은 3.7.0.0, F12 플러그인 버전은 3.7입니다.
 
 ## 버그 제보 방법
 

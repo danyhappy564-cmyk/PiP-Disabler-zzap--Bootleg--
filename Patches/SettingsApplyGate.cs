@@ -36,7 +36,7 @@ namespace PiPDisabler
             if ((_wasOpen && !open) || (_nextKoreanApplyAt > 0f && Time.realtimeSinceStartup >= _nextKoreanApplyAt))
             {
                 _nextKoreanApplyAt = -1f;
-                SettingsKorean.Apply(Settings.ConfigEntries);
+                Localization.Apply(Settings.ConfigEntries);
             }
             _wasOpen = open;
         }
