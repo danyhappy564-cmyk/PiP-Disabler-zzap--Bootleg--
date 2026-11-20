@@ -43,18 +43,14 @@ The following scopes are automatically excluded (they use the game's original re
 
 Scopes whose zoom data is not initialized wait until it is ready. This prevents repeated `ScopeZoomHandler.method_2` errors during weapon transitions while preserving native zoom calculations for initialized scopes. The validity guard remains active when PiP replacement is disabled in F12.
 
-New in 3.7:
+New in 3.6:
 
 - **Pixel Hole Hides Hands** (on by default, suggested by the original author): with the pixel hole, your own arms, gloves and watch are hidden inside the lens circle too, so a hand or sleeve never covers the view through the scope. Outside the lens they look as usual; first-person arm shadows stay off as in the game.
 - **Translations moved to files**: the Korean F12 texts and messages left the code and live in `locales\kr.json`. English is built in; anyone can add a language with a `locales\<game language code>.json` file.
-- **Settings Language values**: `Game` (default — the game language's file if there is one, English otherwise) / `English` / a file name (`kr`, ...). The 3.6 value `Korean` is gone; a cfg that still has it falls back to `Game` (Korean when the game is in Korean).
+- **Settings Language values**: `Game` (default — the game language's file if there is one, English otherwise) / `English` / a file name (`kr`, ...). The earlier value `Korean` is gone; a cfg that still has it falls back to `Game` (Korean when the game is in Korean).
 - The same code was sent to the original author as a pull request (on top of 2.1.0).
-
-New in 3.6:
-
 - **Same Scope Size On Every Weapon** (on by default): the eyepiece sits at a different distance from the eye on each weapon (rail position, mount), so the same scope looked bigger on one rifle than on another. After you have aimed for a moment the eyepiece distance is measured and the weapon scale is corrected so it sits at `Reference Eye Distance (mm)` (default 170) on every weapon. It is measured once per weapon + scope + mount position and kept in `BepInEx\config\PiP-Disabler.eye-distance.txt`. The per-scope weapon scale still applies on top.
 - **No reticle jitter with DLSS/FSR**: the per-frame camera jitter the upscaler adds is left out of the reticle position. With DLSS Performance the reticle no longer shakes by 1-3 px.
-- **Settings language defaults to `Game`**: the F12 texts follow the game's language (Korean when the game is set to Korean, English otherwise). `Korean` or `English` still force one language.
 
 ## Adjusting individual scopes (for example, when the gun looks too large at 20×)
 
@@ -75,7 +71,7 @@ New in 3.6:
    - `PiP-Disabler.dll`
    - `custom_mesh_surgery_settings.json` (per-scope settings)
    - `pipdisabler_reticle_shaders.bundle`, `pipdisabler_effect_shaders.bundle`
-   - `locales\kr.json` (Korean translation, since 3.7)
+   - `locales\kr.json` (Korean translation)
 2. If you have Sierra's port or an older version, remove its DLL (the same mod must not load twice).
 3. In-game, configure it under F12 → `PiP-Disabler`.
 
@@ -90,7 +86,7 @@ dotnet build -c Release
 - The default SPT path is `E:\SPT 4.1`. If yours differs, specify it with `dotnet build -c Release -p:SPTPath="D:\내 SPT"`.
 - Release builds create `bin\Release\net472\PiP-Disabler.dll` and `Releases\PiP-Disabler.zip`. They never copy files into the game automatically.
 - Stop the game/server and back up existing files before manually installing the required output. User scope settings remain in `BepInEx\config\PiP-Disabler.scope-settings.json`.
-- The file version is 3.7.0.0 and the F12 plugin version is 3.7.
+- The file version is 3.6.0.0 and the F12 plugin version is 3.6.
 
 ## How to report bugs
 
