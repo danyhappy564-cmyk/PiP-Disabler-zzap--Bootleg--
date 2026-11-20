@@ -16,7 +16,7 @@ namespace PiPDisabler
 
     public sealed class PiPDisablerPlugin : BaseUnityPlugin
     {
-        public const string PluginVersion = "3.5";
+        public const string PluginVersion = "3.6";
 
         public static ManualLogSource LogSource;
         internal static PiPDisablerPlugin Instance;
@@ -117,6 +117,7 @@ namespace PiPDisabler
 
         private void Update()
         {
+            Settings.TickLanguage();
             if (Settings.ModToggleKey.Value != KeyCode.None && InputProxy.GetKeyDown(Settings.ModToggleKey.Value))
             {
                 Settings.ModEnabled.Value = !Settings.ModEnabled.Value;

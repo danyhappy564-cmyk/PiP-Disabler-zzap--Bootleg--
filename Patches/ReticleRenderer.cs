@@ -358,7 +358,7 @@ namespace PiPDisabler
             cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
             cmd.DrawMesh(fullScreenMesh, fullScreenMatrix, _stencilClearMat, 0, -1);
 
-            cmd.SetViewProjectionMatrices(cam.worldToCameraMatrix, cam.projectionMatrix);
+            cmd.SetViewProjectionMatrices(cam.worldToCameraMatrix, StableProjection(cam));
             for (int i = 0; i < _occluderMaskRenderers.Count; i++)
                 DrawOccluderMaskRenderer(cmd, _occluderMaskRenderers[i]);
             for (int i = 0; i < _lensMaskEntries.Count; i++)
@@ -390,7 +390,7 @@ namespace PiPDisabler
                 for (int v = 0; v < _lensBoundsVertices.Count; v++)
                 {
                     Vector3 local = _lensBoundsVertices[v];
-                    Vector3 view = cam.WorldToViewportPoint(matrix.MultiplyPoint3x4(local));
+                    Vector3 view = WorldToViewportStable(cam, matrix.MultiplyPoint3x4(local));
                     if (view.z <= cam.nearClipPlane) continue;
 
                     min.x = Mathf.Min(min.x, view.x);
@@ -596,6 +596,20 @@ namespace PiPDisabler
         /// off the lens by that angle (scope's inside showing, worst while walking) and EFT camera
         /// glitches made it jitter. OnPreCullCallback then skips the already-done alignment.
         /// </summary>
+        // DLSS / FSR / TAA shake the projection by a sub-pixel offset every frame (jitter) and the upscaler
+        // removes it again. The reticle and its lens mask are drawn after that (AfterEverything, final
+        // resolution), so they must use the projection without the jitter, or they shake with it (3.6:
+        // reticle shook ~1-3 px with DLSS Performance). Without an upscaler both matrices are the same.
+        private static Matrix4x4 StableProjection(Camera cam) => cam.nonJitteredProjectionMatrix;
+
+        private static Vector3 WorldToViewportStable(Camera cam, Vector3 world)
+        {
+            Vector3 view = cam.worldToCameraMatrix.MultiplyPoint3x4(world);
+            Vector4 clip = cam.nonJitteredProjectionMatrix * new Vector4(view.x, view.y, view.z, 1f);
+            if (Mathf.Abs(clip.w) < 1e-6f) return cam.WorldToViewportPoint(world);
+            return new Vector3(clip.x / clip.w * 0.5f + 0.5f, clip.y / clip.w * 0.5f + 0.5f, -view.z);
+        }
+
         internal static void AlignMainCameraEarly(Camera cam)
         {
             if (cam == null || cam != _attachedCamera) return;
@@ -765,7 +779,7 @@ namespace PiPDisabler
         private static Vector2 GetZeroClipOffset(Camera cam)
         {
             if (!_zeroOffsetActive || cam == null) return Vector2.zero;
-            Vector3 vp = cam.WorldToViewportPoint(cam.transform.position + _zeroedForward * 100f);
+            Vector3 vp = WorldToViewportStable(cam, cam.transform.position + _zeroedForward * 100f);
             if (vp.z <= 0f) return Vector2.zero;
             return new Vector2(vp.x * 2f - 1f, vp.y * 2f - 1f);
         }
@@ -1130,7 +1144,7 @@ namespace PiPDisabler
                     DrawActiveReticle();
             }
 
-            _cmdBuffer.SetViewProjectionMatrices(cam.worldToCameraMatrix, cam.projectionMatrix);
+            _cmdBuffer.SetViewProjectionMatrices(cam.worldToCameraMatrix, StableProjection(cam));
         }
 
         public static bool AppendReticleForNvgLensBlur(CommandBuffer cmd, Rect viewport)

@@ -75,7 +75,8 @@ namespace PiPDisabler.Patches
         /// </summary>
         private static bool TryGetScale(out float scale)
         {
-            scale = GetManualScale();
+            // 3.6: same scope looks the same on every weapon (eyepiece distance normalised).
+            scale = EyeDistanceNormalizer.Apply(GetManualScale());
             if (!Settings.FOVFixBehaviour.Value || !CameraManager.Exist || CameraManager.Instance == null)
                 return true;
 

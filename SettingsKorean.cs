@@ -51,8 +51,12 @@ namespace PiPDisabler
                 "켜면 1배율 스코프(도트 등)는 확대 없이 게임 설정의 시야(FOV) 그대로 보입니다." + Live),
             [K("General", "Global Scope Scaling Multiplier")] = new Text(CatBasic, "총 크기 (기본값)",
                 "스코프 볼 때 총이 화면에 보이는 크기. 클수록 총이 작아짐. 스코프별 '총 크기'를 정해둔 스코프에는 적용 안 됨." + Live),
+            [K("General", "Same Scope Size On Every Weapon")] = new Text(CatBasic, "같은 스코프는 어느 총에서나 같은 크기",
+                "총마다 레일 위치·마운트가 달라 눈~접안렌즈 거리가 다르기 때문에, 같은 스코프도 총에 따라 크게/작게 보였습니다. 켜면 조준하고 잠깐 뒤 그 거리를 재서, 어느 총이든 '기준 눈 거리'에 오도록 총 크기를 자동 보정합니다. 총+스코프+장착 위치마다 한 번 재고 기억합니다." + Live),
+            [K("General", "Reference Eye Distance (mm)")] = new Text(CatBasic, "기준 눈 거리 (mm)",
+                "모든 총을 맞출 눈~접안렌즈 거리(총 크기 1 기준). 클수록 모든 총에서 스코프가 작게 보입니다. 스코프별 '총 크기'는 그 위에 그대로 적용됩니다." + Live),
             [K("General", "Settings Language")] = new Text(CatBasic, "설정 언어 / Language",
-                "F12 설정과 안내 메시지 언어: Korean(한국어) / English(영어). 바꾼 뒤 F12 창을 닫았다가 다시 여세요.\nClose and reopen F12 after changing."),
+                "F12 설정과 안내 메시지 언어: Game(게임 언어를 따름 — 게임이 한국어면 한국어, 아니면 영어) / Korean(항상 한국어) / English(항상 영어). 바꾼 뒤 F12 창을 닫았다가 다시 여세요.\nGame = follow the game's language. Close and reopen F12 after changing."),
             [K("General", "Reticle Follows Zoom Multiplier")] = new Text(CatBasic, "조준선이 확대 배수 따라가기",
                 "켜면 스코프별 '확대 배수'를 바꿀 때 조준선 크기도 같은 비율로 바뀌어, 렌즈·목표물 대비 크기가 그대로 유지됩니다." + Live),
             [K("General", "Global Reticle Scaling Multiplier")] = new Text(CatBasic, "조준선 크기 (기본값)",
@@ -297,7 +301,7 @@ namespace PiPDisabler
                     attributes.IsAdvanced = false;
                 if (Hidden.Contains(key) || entry.Definition.Section == "Global Mesh Surgery settings")
                     attributes.Browsable = false;
-                if (Settings.Language != null && Settings.Language.Value == Settings.SettingsLanguage.English)
+                if (!Settings.IsKorean)
                 {
                     // English: the original names, sections and descriptions.
                     attributes.DispName = null;

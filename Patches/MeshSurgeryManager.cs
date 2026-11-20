@@ -1296,6 +1296,7 @@ namespace PiPDisabler
             {
                 // Camera turned to the scope first, so the pixel hole and measurements see the view as rendered.
                 ReticleRenderer.AlignMainCameraEarly(c);
+                EyeDistanceNormalizer.OnPreCullMain(c);
                 if (_autoScopeRoot != null)
                 {
                     _renderEyeBucket = LiveApexBucket(c);
@@ -1360,7 +1361,7 @@ namespace PiPDisabler
         }
 
         // The transform EFT stretches with (1,1,s) while rendering, found among the weapon's parents.
-        private static Transform FindStretchFrame(Transform weaponRoot, float sNow)
+        internal static Transform FindStretchFrame(Transform weaponRoot, float sNow)
         {
             if (weaponRoot == null) return null;
             Transform found = null; int count = 0;

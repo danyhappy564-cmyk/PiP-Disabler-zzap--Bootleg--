@@ -27,6 +27,8 @@ namespace PiPDisabler
         public static ConfigEntry<float> PostStanceAimGateDuration;
         public static ConfigEntry<bool> FOVFixBehaviour;
         public static ConfigEntry<float> GlobalScopeScalingMultiplier;
+        public static ConfigEntry<bool> NormalizeEyeDistance;
+        public static ConfigEntry<float> ReferenceEyeDistanceMm;
         public static ConfigEntry<float> GlobalReticleScalingMultiplier;
         
         // --- Optimization ---
@@ -68,10 +70,47 @@ namespace PiPDisabler
         public static ConfigEntry<bool> ReticleFollowsZoom;
         public static ConfigEntry<float> HoleOffAxisMargin;
 
-        public enum SettingsLanguage { Korean, English }
+        public enum SettingsLanguage { Game, Korean, English }
 
         /// <summary>Pick the Korean or English text for user-facing messages.</summary>
-        internal static string L(string ko, string en) => Language != null && Language.Value == SettingsLanguage.English ? en : ko;
+        internal static string L(string ko, string en) => IsKorean ? ko : en;
+
+        /// <summary>Korean texts? "Game" (default, 3.6) follows the game's language: Korean only when the game is set to Korean.</summary>
+        internal static bool IsKorean
+        {
+            get
+            {
+                if (Language == null) return false;
+                if (Language.Value == SettingsLanguage.Korean) return true;
+                if (Language.Value == SettingsLanguage.English) return false;
+                return GameLanguageIsKorean();
+            }
+        }
+
+        private static bool GameLanguageIsKorean()
+        {
+            try
+            {
+                if (Comfort.Common.Singleton<EFT.Settings.SettingsManager>.Instantiated)
+                    return Comfort.Common.Singleton<EFT.Settings.SettingsManager>.Instance.Game.Settings.Language.Value == "kr";
+            }
+            catch { }
+            return false;
+        }
+
+        // The game's settings are not loaded yet when the plugin starts, and the player can change the
+        // language in game: re-apply the F12 texts when the language the "Game" option resolves to changes.
+        private static bool? _appliedKorean;
+        private static float _nextLanguageCheck;
+        internal static void TickLanguage()
+        {
+            if (Language == null || Time.unscaledTime < _nextLanguageCheck) return;
+            _nextLanguageCheck = Time.unscaledTime + 2f;
+            bool ko = IsKorean;
+            if (_appliedKorean == ko) return;
+            _appliedKorean = ko;
+            SettingsKorean.Apply(ConfigEntries);
+        }
         public static ConfigEntry<KeyCode> RecutHoleKey;
         public static ConfigEntry<bool> PrecutHeldScope;
         public static ConfigEntry<bool> RecutEveryAim;
@@ -196,9 +235,19 @@ namespace PiPDisabler
                     "Multiplies the scaling of all scopes, useful if you feel like the scopes are too small or too large.",
                     new AcceptableValueRange<float>(0.25f, 3f),
                     new ConfigurationManagerAttributes { IsAdvanced = false })));
-            ConfigEntries.Add(Language = config.Bind("General", "Settings Language", SettingsLanguage.Korean,
+            ConfigEntries.Add(NormalizeEyeDistance = config.Bind("General", "Same Scope Size On Every Weapon", true,
                 new ConfigDescription(
-                    "Language of the F12 settings and messages: Korean or English. Close and reopen F12 after changing.",
+                    "The eyepiece sits at a different distance from the eye on each weapon (rail position, mount), so the same scope looked bigger on one rifle than on another. On: once you have aimed for a moment, the eyepiece distance is measured and the weapon scale is corrected so it sits at 'Reference Eye Distance' on every weapon. Measured once per weapon + scope + mount position and kept (BepInEx/config/PiP-Disabler.eye-distance.txt).",
+                    null,
+                    new ConfigurationManagerAttributes { IsAdvanced = false })));
+            ConfigEntries.Add(ReferenceEyeDistanceMm = config.Bind("General", "Reference Eye Distance (mm)", 170f,
+                new ConfigDescription(
+                    "Eyepiece distance from the camera (at weapon scale 1) that every weapon is corrected to. Larger = the scope looks smaller on all weapons. Per-scope weapon scale still applies on top.",
+                    new AcceptableValueRange<float>(80f, 400f),
+                    new ConfigurationManagerAttributes { IsAdvanced = true })));
+            ConfigEntries.Add(Language = config.Bind("General", "Settings Language", SettingsLanguage.Game,
+                new ConfigDescription(
+                    "Language of the F12 settings and messages. Game = follow the game's language (Korean when the game is in Korean, English otherwise); Korean / English = always that one. Close and reopen F12 after changing.",
                     null,
                     new ConfigurationManagerAttributes { IsAdvanced = false, Order = 1000 })));
             ConfigEntries.Add(ReticleFollowsZoom = config.Bind("General", "Reticle Follows Zoom Multiplier", true,
@@ -729,6 +778,8 @@ namespace PiPDisabler
             RegisterVisualEffectLiveUpdates();
             RegisterReapplyOnChange();
             Language.SettingChanged += (s, e) => SettingsKorean.Apply(ConfigEntries);
+            NormalizeEyeDistance.SettingChanged += (s, e) => EyeDistanceNormalizer.OnSettingsChanged();
+            ReferenceEyeDistanceMm.SettingChanged += (s, e) => EyeDistanceNormalizer.OnSettingsChanged();
             SettingsKorean.Apply(ConfigEntries);
             RecalcOrder();
         }
