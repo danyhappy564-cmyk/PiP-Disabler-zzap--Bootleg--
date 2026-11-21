@@ -4,7 +4,7 @@
 		<LangVersion>latest</LangVersion>
 		<Nullable>disable</Nullable>
 		<AssemblyName>PiP-Disabler</AssemblyName>
-		<Version>3.6</Version>
+		<Version>3.7</Version>
 		<RootNamespace>PiP-Disabler</RootNamespace>
 		<GenerateAssemblyInfo>true</GenerateAssemblyInfo>
 		<ModName>$(AssemblyName)</ModName>

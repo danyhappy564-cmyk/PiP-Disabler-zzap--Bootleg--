@@ -24,7 +24,7 @@
 
 ## Changelog
 
-The full changelog (76 entries) is in the [`changelog/`](changelog/) folder, 10 per file (higher number = newer, latest: [`CHANGELOG-008.md`](changelog/CHANGELOG-008.md)). Per-release summaries: [Releases](../../releases).
+The full changelog (77 entries) is in the [`changelog/`](changelog/) folder, 10 per file (higher number = newer, latest: [`CHANGELOG-008.md`](changelog/CHANGELOG-008.md)). Per-release summaries: [Releases](../../releases).
 
 ## What this mod does
 
@@ -43,13 +43,19 @@ The following scopes are automatically excluded (they use the game's original re
 
 Scopes whose zoom data is not initialized wait until it is ready. This prevents repeated `ScopeZoomHandler.method_2` errors during weapon transitions while preserving native zoom calculations for initialized scopes. The validity guard remains active when PiP replacement is disabled in F12.
 
+Changed in 3.7:
+
+- **Mod files moved into the mod folder**: per-scope settings, measured eye/camera distances and used zoom levels are saved in `BepInEx\plugins\PiP-Disabler\user-data\` instead of `BepInEx\config`. The release zip has no such folder, so installing over the old one keeps them. Old `BepInEx\config\PiP-Disabler.*` files are moved there automatically when the game starts. The F12 settings file (`.cfg`) stays in `BepInEx\config` (original author's review).
+- **Less snapping on the first aim**: with a new weapon/scope/mount, the eye distance is measured shortly after you aim and the weapon scale used to change in one frame, so the weapon snapped. The correction is now blended in over 0.35 s (original author's review).
+- **Vignette hint**: 40 bundled scopes (Vudu and others) have their own vignette values, so the global `Scope Effects` vignette does not apply to them. The F12 description now says to aim with that scope and change it under `3. Per scope settings`.
+
 New in 3.6:
 
 - **Pixel Hole Hides Hands** (on by default, suggested by the original author): with the pixel hole, your own arms, gloves and watch are hidden inside the lens circle too, so a hand or sleeve never covers the view through the scope. Outside the lens they look as usual; first-person arm shadows stay off as in the game.
 - **Translations moved to files**: the Korean F12 texts and messages left the code and live in `locales\kr.json`. English is built in; anyone can add a language with a `locales\<game language code>.json` file.
 - **Settings Language values**: `Game` (default — the game language's file if there is one, English otherwise) / `English` / a file name (`kr`, ...). The earlier value `Korean` is gone; a cfg that still has it falls back to `Game` (Korean when the game is in Korean).
 - The same code was sent to the original author as a pull request (on top of 2.1.0).
-- **Same Scope Size On Every Weapon** (on by default): the eyepiece sits at a different distance from the eye on each weapon (rail position, mount), so the same scope looked bigger on one rifle than on another. After you have aimed for a moment the eyepiece distance is measured and the weapon scale is corrected so it sits at `Reference Eye Distance (mm)` (default 170) on every weapon. It is measured once per weapon + scope + mount position and kept in `BepInEx\config\PiP-Disabler.eye-distance.txt`. The per-scope weapon scale still applies on top.
+- **Same Scope Size On Every Weapon** (on by default): the eyepiece sits at a different distance from the eye on each weapon (rail position, mount), so the same scope looked bigger on one rifle than on another. After you have aimed for a moment the eyepiece distance is measured and the weapon scale is corrected so it sits at `Reference Eye Distance (mm)` (default 170) on every weapon. It is measured once per weapon + scope + mount position and kept in `user-data\eye-distance.txt`. The per-scope weapon scale still applies on top.
 - **No reticle jitter with DLSS/FSR**: the per-frame camera jitter the upscaler adds is left out of the reticle position. With DLSS Performance the reticle no longer shakes by 1-3 px.
 
 ## Adjusting individual scopes (for example, when the gun looks too large at 20×)
@@ -63,7 +69,7 @@ New in 3.6:
    - You want more or less zoom → adjust **확대 배수 (Zoom multiplier)** (1 = original, 2 = double). More zoom makes the body look larger too, so increase gun size as well.
    - For finer controls (cutout circle position/size, etc.), enable "고급 설정(Advanced settings)" at the top right of F12.
 3. To reset, bind `이 스코프 설정 초기화 키` (Reset this scope's settings key), then press it while aiming.
-4. Your values are saved in `BepInEx\config\PiP-Disabler.scope-settings.json`. They survive mod updates; backing up this file is enough.
+4. Your values are saved in `BepInEx\plugins\PiP-Disabler\user-data\scope-settings.json`. They survive mod updates; backing up this file is enough.
 
 ## Installation
 
@@ -85,8 +91,8 @@ dotnet build -c Release
 
 - The default SPT path is `E:\SPT 4.1`. If yours differs, specify it with `dotnet build -c Release -p:SPTPath="D:\내 SPT"`.
 - Release builds create `bin\Release\net472\PiP-Disabler.dll` and `Releases\PiP-Disabler.zip`. They never copy files into the game automatically.
-- Stop the game/server and back up existing files before manually installing the required output. User scope settings remain in `BepInEx\config\PiP-Disabler.scope-settings.json`.
-- The file version is 3.6.0.0 and the F12 plugin version is 3.6.
+- Stop the game/server and back up existing files before manually installing the required output. User scope settings remain in `BepInEx\plugins\PiP-Disabler\user-data\scope-settings.json`.
+- The file version is 3.7.0.0 and the F12 plugin version is 3.7.
 
 ## How to report bugs
 
