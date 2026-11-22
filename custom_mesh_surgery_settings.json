@@ -913,8 +913,8 @@
       "WeaponScaleMaxMagnification": 2.90422535,
       "WeaponScaleMultiplier": 1.0,
       "VisualRecoilCompensation": 0.25,
-      "VignetteOpacity": 1.0,
-      "VignetteRadius": 0.2676056,
+      "VignetteOpacity": 0.0,
+      "VignetteRadius": 0.0,
       "VignetteSoftness": 0.0,
       "ExpandSearchToWeaponRoot": true
     },
