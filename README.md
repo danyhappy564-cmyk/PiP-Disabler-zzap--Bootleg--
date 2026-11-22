@@ -43,6 +43,10 @@
 
 줌 정보가 아직 준비되지 않은 스코프는 준비될 때까지 업데이트를 기다립니다. 총·칼 교체 중 발생할 수 있는 `ScopeZoomHandler.method_2` 반복 오류를 막으며, 준비된 스코프의 배율 계산은 그대로 사용합니다. 이 보호는 F12에서 PiP 대체 기능을 꺼도 유지됩니다.
 
+3.8에서 바뀐 동작입니다.
+
+- **Vudu 비네팅 크기 조절**: Vudu 기본 스코프 설정에 들어 있던 비네팅 값(반경 0.27·진하기 1.0)을 지웠습니다. 이제 Vudu도 `화면 효과`의 전체 비네팅 값(진하기·반경·부드러움)을 따르므로 크기를 조절할 수 있습니다. 직접 저장한 스코프별 값(`user-data`)은 그대로 유지되고 그 값이 먼저 적용됩니다.
+
 3.7에서 바뀐 동작입니다.
 
 - **모드가 만드는 파일을 모드 폴더로**: 스코프별 설정·측정한 눈 거리·카메라 거리·사용한 배율 파일이 `BepInEx\config`가 아니라 `BepInEx\plugins\PiP-Disabler\user-data\`에 저장됩니다. 배포 zip에는 이 폴더가 없어서 덮어쓰기 설치해도 지워지지 않습니다. 예전 `BepInEx\config\PiP-Disabler.*` 파일은 게임을 켤 때 새 폴더로 자동으로 옮겨집니다. F12 설정 파일(`.cfg`)은 그대로 `BepInEx\config`에 있습니다(원작자 리뷰 반영).
@@ -92,7 +96,7 @@ dotnet build -c Release
 - 기본 SPT 경로는 `E:\SPT 4.1`입니다. 다르면 `dotnet build -c Release -p:SPTPath="D:\내 SPT"`로 지정합니다.
 - Release 빌드는 `bin\Release\net472\PiP-Disabler.dll`과 `Releases\PiP-Disabler.zip`을 만듭니다. 게임 폴더에 자동 복사하지 않습니다.
 - 설치할 때는 게임·서버를 종료하고 기존 파일을 백업한 뒤 필요한 파일만 수동 복사하십시오. 사용자 스코프 설정은 `BepInEx\plugins\PiP-Disabler\user-data\scope-settings.json`에 유지됩니다.
-- 파일 속성 버전은 3.7.0.0, F12 플러그인 버전은 3.7입니다.
+- 파일 속성 버전은 3.8.0.0, F12 플러그인 버전은 3.8입니다.
 
 ## 버그 제보 방법
 

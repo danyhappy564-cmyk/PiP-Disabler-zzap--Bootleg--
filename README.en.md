@@ -43,6 +43,10 @@ The following scopes are automatically excluded (they use the game's original re
 
 Scopes whose zoom data is not initialized wait until it is ready. This prevents repeated `ScopeZoomHandler.method_2` errors during weapon transitions while preserving native zoom calculations for initialized scopes. The validity guard remains active when PiP replacement is disabled in F12.
 
+Changed in 3.8:
+
+- **Vudu vignette size**: the bundled Vudu preset no longer carries its own vignette values (radius 0.27, opacity 1.0). Vudu now follows the global `Scope Effects` vignette (opacity, radius, softness), so its size can be adjusted. Per-scope values you saved yourself (`user-data`) are kept and still take priority.
+
 Changed in 3.7:
 
 - **Mod files moved into the mod folder**: per-scope settings, measured eye/camera distances and used zoom levels are saved in `BepInEx\plugins\PiP-Disabler\user-data\` instead of `BepInEx\config`. The release zip has no such folder, so installing over the old one keeps them. Old `BepInEx\config\PiP-Disabler.*` files are moved there automatically when the game starts. The F12 settings file (`.cfg`) stays in `BepInEx\config` (original author's review).
@@ -92,7 +96,7 @@ dotnet build -c Release
 - The default SPT path is `E:\SPT 4.1`. If yours differs, specify it with `dotnet build -c Release -p:SPTPath="D:\내 SPT"`.
 - Release builds create `bin\Release\net472\PiP-Disabler.dll` and `Releases\PiP-Disabler.zip`. They never copy files into the game automatically.
 - Stop the game/server and back up existing files before manually installing the required output. User scope settings remain in `BepInEx\plugins\PiP-Disabler\user-data\scope-settings.json`.
-- The file version is 3.7.0.0 and the F12 plugin version is 3.7.
+- The file version is 3.8.0.0 and the F12 plugin version is 3.8.
 
 ## How to report bugs
 
