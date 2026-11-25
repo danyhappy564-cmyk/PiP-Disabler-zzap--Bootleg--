@@ -24,7 +24,7 @@
 
 ## Changelog
 
-The full changelog (79 entries) is in the [`changelog/`](changelog/) folder, 10 per file (higher number = newer, latest: [`CHANGELOG-008.md`](changelog/CHANGELOG-008.md)). Per-release summaries: [Releases](../../releases).
+The full changelog (81 entries) is in the [`changelog/`](changelog/) folder, 10 per file (higher number = newer, latest: [`CHANGELOG-009.md`](changelog/CHANGELOG-009.md)). Per-release summaries: [Releases](../../releases).
 
 ## What this mod does
 
