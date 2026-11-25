@@ -2292,7 +2292,7 @@ namespace PiPDisabler
                 if (!mf || !mf.sharedMesh) continue;
                 inspected++;
 
-                string relSearchPath = null;
+                string relSearchPath = GetRelativePath(mf.transform, searchRoot);
 
                 if (IsVolatileWeaponPath(relSearchPath))
                 {
@@ -2303,6 +2303,11 @@ namespace PiPDisabler
                     continue;
 
                 if (IsTextMeshProOwnedMesh(mf))
+                    continue;
+
+                // EFT regenerates the combined muzzle-flash mesh, including empty frames.
+                // Leave this effect mesh under the control of muzzle/VFX rendering (upstream 5749d1d, SPT 4.1.6).
+                if (IsRuntimeMuzzleMesh(mf.gameObject.name, mf.sharedMesh.name))
                     continue;
 
                 var renderer = mf.GetComponent<Renderer>();
@@ -2317,6 +2322,12 @@ namespace PiPDisabler
                 $"{result.Count} targets");
 
             return result;
+        }
+
+        internal static bool IsRuntimeMuzzleMesh(string objectName, string meshName)
+        {
+            return string.Equals(objectName, "MuzzleJetCombinedMesh", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(meshName, "MuzzleJet UpdateOrCreateMesh", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsVolatileWeaponPath(string relativePath)

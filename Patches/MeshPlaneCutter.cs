@@ -15,7 +15,7 @@ namespace PiPDisabler
 
             // Some runtime meshes (e.g. 'MuzzleJet UpdateOrCreateMesh') have no GPU vertex buffer.
             // Bail out before allocating; a failed copy used to leak a Mesh (and GPU buffers) every rebuild.
-            if (nonReadableMesh.vertexBufferCount == 0 || nonReadableMesh.vertexCount == 0)
+            if (nonReadableMesh.vertexBufferCount == 0 || nonReadableMesh.vertexCount == 0 || nonReadableMesh.subMeshCount == 0)
                 return null;
 
             Mesh meshCopy = null;
