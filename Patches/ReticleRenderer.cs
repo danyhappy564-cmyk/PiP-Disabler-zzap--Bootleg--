@@ -781,7 +781,13 @@ namespace PiPDisabler
             if (!_zeroOffsetActive || cam == null) return Vector2.zero;
             Vector3 vp = WorldToViewportStable(cam, cam.transform.position + _zeroedForward * 100f);
             if (vp.z <= 0f) return Vector2.zero;
-            return new Vector2(vp.x * 2f - 1f, vp.y * 2f - 1f);
+            // Whole screen pixels only (3.8.1): a fractional offset (from the stable, non-jittered projection
+            // used since 3.6 for DLSS/FSR) put the reticle's 1-px lines between pixel centres, so thin strokes
+            // (Vudu's centre cross) broke into dots, worst at 4K with upscaling (original author's comparison).
+            // Without the zero offset the reticle sits on the screen centre, which is pixel-aligned.
+            Rect r = GetDisplayViewport(cam);
+            float px = 2f / Mathf.Max(1f, r.width), py = 2f / Mathf.Max(1f, r.height);
+            return new Vector2(Mathf.Round((vp.x * 2f - 1f) / px) * px, Mathf.Round((vp.y * 2f - 1f) / py) * py);
         }
 
         // Result of this frame's alignment (2.8.14). [Jitter] (2.8.13) showed the alignment running twice
