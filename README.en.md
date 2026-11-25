@@ -43,6 +43,10 @@ The following scopes are automatically excluded (they use the game's original re
 
 Scopes whose zoom data is not initialized wait until it is ready. This prevents repeated `ScopeZoomHandler.method_2` errors during weapon transitions while preserving native zoom calculations for initialized scopes. The validity guard remains active when PiP replacement is disabled in F12.
 
+Changed in 3.8.1:
+
+- **Hand hiding actually works now**: with `Pixel Hole Hides Hands` on, the support hand and glove still showed inside the lens when aiming (reported by the original author). The watch glass on the USEC/BEAR arm model kept the whole arm out of the hiding. Now the arm disappears only inside the lens and keeps its normal lighting outside it (checked in raid and in the hideout shooting range). Only the watch glass is not drawn while aiming.
+
 Changed in 3.8:
 
 - **Vudu vignette size**: the bundled Vudu preset no longer carries its own vignette values (radius 0.27, opacity 1.0). Vudu now follows the global `Scope Effects` vignette (opacity, radius, softness), so its size can be adjusted. Per-scope values you saved yourself (`user-data`) are kept and still take priority.
@@ -96,7 +100,7 @@ dotnet build -c Release
 - The default SPT path is `E:\SPT 4.1`. If yours differs, specify it with `dotnet build -c Release -p:SPTPath="D:\내 SPT"`.
 - Release builds create `bin\Release\net472\PiP-Disabler.dll` and `Releases\PiP-Disabler.zip`. They never copy files into the game automatically.
 - Stop the game/server and back up existing files before manually installing the required output. User scope settings remain in `BepInEx\plugins\PiP-Disabler\user-data\scope-settings.json`.
-- The file version is 3.8.0.0 and the F12 plugin version is 3.8.
+- The file version is 3.8.1.0 and the F12 plugin version is 3.8.1.
 
 ## How to report bugs
 
