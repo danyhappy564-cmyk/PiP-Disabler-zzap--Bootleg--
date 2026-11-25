@@ -54,19 +54,23 @@ namespace PiPDisabler
         private static readonly List<Material> _mats = new List<Material>(4);
         private static bool _failedThisSession;
         private static bool _loggedFrame;
+        private static int _frameNo;
+        private static string _handSetup = "";
 
         // Own arms, gloves and watch ("Pixel Hole Hides Hands"): hidden inside the lens circle like the scope
-        // body. They are taken out of the normal pass by moving them to a layer the main camera does not
-        // render (not ShadowsOnly: EFT turns the first-person arms' shadows off, ShadowsOnly would add them),
-        // and kept skinned meanwhile with updateWhenOffscreen.
+        // body. They are taken out of the normal pass with forceRenderingOff and drawn by our buffer instead
+        // (not ShadowsOnly: EFT turns the first-person arms' shadows off, ShadowsOnly would add them), and
+        // kept skinned meanwhile with updateWhenOffscreen. 3.8.1: before, they were moved to a layer the main
+        // camera does not render; that also took them out of the lights' culling masks (raid: 409 lights
+        // light the arms' layer 8, no hidden layer more than 2), so the layer now stays as it is. The arms
+        // drawn by the buffer were almost black outside the lens for a second reason too: see NonBackgroundMat.
         private struct HandState
         {
-            public int Layer;
             public bool Offscreen;
+            public bool ForceOff;
         }
         private static readonly List<Renderer> _hands = new List<Renderer>(8);
         private static readonly Dictionary<Renderer, HandState> _handsMoved = new Dictionary<Renderer, HandState>();
-        private static int _hiddenLayer = -1;
         private static readonly System.Reflection.FieldInfo WatchesField = HarmonyLib.AccessTools.Field(typeof(EFT.PlayerBody), "_watches");
 
         internal static bool Enabled => Settings.PixelHoleMode != null && Settings.PixelHoleMode.Value && !_failedThisSession;
@@ -129,10 +133,11 @@ namespace PiPDisabler
                 _cam = cam;
                 _os = os;
                 _loggedFrame = false;
+                _frameNo = 0;
                 MeshSurgeryManager.DisableScopeExtras(scopeRoot);
                 MeshSurgeryManager.EnsureRenderHook();
                 PiPDisablerPlugin.LogSource.LogInfo(
-                    $"[PixelHole] On for '{os.name}': lens r={lensR * 1000f:F1}mm, hole r={_holeR * 1000f:F1}mm, {_candidates.Count} weapon parts and {_hands.Count} hand parts checked per frame{(_hands.Count > 0 ? $" (hands hidden on layer {_hiddenLayer})" : "")}, camera far={cam.farClipPlane:F0}m (projection far {ProjectionFar(cam)}){OtherBuffers(cam)}");
+                    $"[PixelHole] On for '{os.name}': lens r={lensR * 1000f:F1}mm, hole r={_holeR * 1000f:F1}mm, {_candidates.Count} weapon parts and {_hands.Count} hand parts checked per frame{(_hands.Count > 0 ? " (hands taken out of the normal pass while they cover the lens)" : "")}, camera far={cam.farClipPlane:F0}m (projection far {ProjectionFar(cam)}){OtherBuffers(cam)}");
                 return true;
             }
             catch (Exception ex)
@@ -174,6 +179,7 @@ namespace PiPDisabler
                     try { kv.Key.shadowCastingMode = kv.Value; } catch { }
             _moved.Clear();
             RestoreHands();
+            ReleaseBaked();
             if (_os != null)
             {
                 if (_weaponRoot != null) MeshSurgeryManager.RestoreScopeExtras(_weaponRoot);
@@ -192,15 +198,8 @@ namespace PiPDisabler
         private static void CollectHands(Camera cam)
         {
             _hands.Clear();
-            _hiddenLayer = -1;
+            _handSetup = "";
             if (Settings.PixelHoleHidesHands == null || !Settings.PixelHoleHidesHands.Value) return;
-            for (int i = 31; i >= 0; i--)
-                if ((cam.cullingMask & (1 << i)) == 0) { _hiddenLayer = i; break; }
-            if (_hiddenLayer < 0)
-            {
-                PiPDisablerPlugin.LogSource.LogInfo("[PixelHole] Main camera renders every layer — hands are not hidden");
-                return;
-            }
             var player = Helpers.GetLocalPlayer();
             var body = player != null ? player.PlayerBody : null;
             if (body == null) return;
@@ -208,15 +207,27 @@ namespace PiPDisabler
             {
                 var g = skin.GetComponentInChildren<LODGroup>(true);
                 if (g == null) g = skin.GetComponentInParent<LODGroup>();
+                var sb = new System.Text.StringBuilder();
+                sb.Append($"player={player.GetType().Name} skin='{skin.name}' ");
                 if (g != null)
                 {
                     var lods = g.GetLODs();
+                    sb.Append($"lodGroup='{g.name}' levels={lods.Length} lodEnabled={g.enabled}");
+                    for (int i = 0; i < lods.Length; i++)
+                    {
+                        sb.Append($" L{i}=[");
+                        foreach (var lr in lods[i].renderers) if (lr != null) sb.Append(lr.name).Append(' ');
+                        sb.Append(']');
+                    }
                     for (int i = 1; i < lods.Length; i++)
                         foreach (var lr in lods[i].renderers) if (lr != null) _lodHidden.Add(lr);
                 }
+                else sb.Append("lodGroup=none");
+                _handSetup = sb.ToString();
                 foreach (var r in skin.GetRenderers())
                     if (r != null && !_hands.Contains(r)) _hands.Add(r);
             }
+            else _handSetup = $"player={player.GetType().Name} no Hands skin";
             if (WatchesField != null && WatchesField.GetValue(body) is Component watch && watch != null)
                 foreach (var r in watch.GetComponentsInChildren<Renderer>(true))
                     if (r != null && !_hands.Contains(r)) _hands.Add(r);
@@ -229,15 +240,17 @@ namespace PiPDisabler
             return mf != null ? mf.sharedMesh : null;
         }
 
-        // A hand part is only hidden when all its materials have a deferred pass (we redraw it in that pass);
-        // otherwise it is left as it is (a forward-only hand would vanish instead of being drawn by us).
-        private static bool AllDeferred(Renderer r, Mesh mesh)
+        // A hand part is hidden when at least one of its materials has a deferred pass (we redraw those in that
+        // pass). 3.8.1: was "all materials" — the USEC/BEAR arms carry the watch glass (EFT/Glass, forward only)
+        // as a third sub-mesh, so the whole arm was never hidden. Forward-only sub-meshes (that glass) are not
+        // drawn while the arm is hidden; a part with no deferred material at all is left as it is.
+        private static bool AnyDeferred(Renderer r, Mesh mesh)
         {
             r.GetSharedMaterials(_mats);
             int subs = Mathf.Min(_mats.Count, mesh.subMeshCount);
             for (int i = 0; i < subs; i++)
-                if (_mats[i] != null && DeferredPass(_mats[i]) < 0) return false;
-            return subs > 0;
+                if (_mats[i] != null && DeferredPass(_mats[i]) >= 0) return true;
+            return false;
         }
 
         private static void RestoreHand(Renderer r)
@@ -245,7 +258,7 @@ namespace PiPDisabler
             if (r == null || !_handsMoved.TryGetValue(r, out var st)) return;
             try
             {
-                r.gameObject.layer = st.Layer;
+                r.forceRenderingOff = st.ForceOff;
                 if (r is SkinnedMeshRenderer s) s.updateWhenOffscreen = st.Offscreen;
             }
             catch { }
@@ -258,7 +271,7 @@ namespace PiPDisabler
                 if (kv.Key != null)
                     try
                     {
-                        kv.Key.gameObject.layer = kv.Value.Layer;
+                        kv.Key.forceRenderingOff = kv.Value.ForceOff;
                         if (kv.Key is SkinnedMeshRenderer s) s.updateWhenOffscreen = kv.Value.Offscreen;
                     }
                     catch { }
@@ -360,10 +373,10 @@ namespace PiPDisabler
             bool hideHands = Settings.PixelHoleHidesHands != null && Settings.PixelHoleHidesHands.Value;
             foreach (var r in _hands)
             {
-                bool use = hideHands && r != null && r.enabled && !r.forceRenderingOff && r.gameObject.activeInHierarchy &&
+                bool use = hideHands && r != null && r.enabled && (!r.forceRenderingOff || _handsMoved.ContainsKey(r)) && r.gameObject.activeInHierarchy &&
                            !_lodHidden.Contains(r) && Touches(c, r.bounds, sc, reach);
                 var mesh = use ? MeshOf(r) : null;
-                if (mesh == null || (!_handsMoved.ContainsKey(r) && !AllDeferred(r, mesh)))
+                if (mesh == null || (!_handsMoved.ContainsKey(r) && !AnyDeferred(r, mesh)))
                 {
                     RestoreHand(r);
                     continue;
@@ -371,20 +384,42 @@ namespace PiPDisabler
                 if (!_handsMoved.ContainsKey(r))
                 {
                     var smr = r as SkinnedMeshRenderer;
-                    _handsMoved[r] = new HandState { Layer = r.gameObject.layer, Offscreen = smr != null && smr.updateWhenOffscreen };
-                    r.gameObject.layer = _hiddenLayer;
+                    _handsMoved[r] = new HandState { Offscreen = smr != null && smr.updateWhenOffscreen, ForceOff = r.forceRenderingOff };
+                    r.forceRenderingOff = true;
                     if (smr != null) smr.updateWhenOffscreen = true;
                 }
                 hands++;
+                // A renderer with forceRenderingOff is not drawn by DrawRenderer either (3.8.1 test: the arms
+                // vanished entirely), so the arms are baked in their current pose and drawn as a plain mesh,
+                // with the renderer's own property block and its light-probe ambient.
+                Mesh drawMesh = mesh;
+                Matrix4x4 world = r.localToWorldMatrix;
+                if (r is SkinnedMeshRenderer bake)
+                {
+                    if (!_baked.TryGetValue(r, out var bm) || bm == null)
+                    {
+                        bm = new Mesh { name = "PiPDisabler baked hand" };
+                        bm.MarkDynamic();
+                        _baked[r] = bm;
+                    }
+                    bake.BakeMesh(bm, true);
+                    drawMesh = bm;
+                    world = Matrix4x4.TRS(r.transform.position, r.transform.rotation, Vector3.one);
+                }
+                if (_mpb == null) _mpb = new MaterialPropertyBlock();
+                r.GetPropertyBlock(_mpb);
+                SetAmbient(_mpb, r);
                 r.GetSharedMaterials(_mats);
-                int subs = Mathf.Min(_mats.Count, mesh.subMeshCount);
+                int subs = Mathf.Min(_mats.Count, drawMesh.subMeshCount);
                 for (int i = 0; i < subs; i++)
                 {
                     var m = _mats[i];
                     if (m == null) continue;
                     int pass = DeferredPass(m);
                     if (pass < 0) continue;
-                    _cb.DrawRenderer(r, m, i, pass);
+                    _cb.DrawMesh(drawMesh, world, m, i, pass, _mpb);
+                    var mark = NonBackgroundMat();
+                    if (mark != null) _cb.DrawMesh(drawMesh, world, mark, i, 0);
                     drawn++;
                 }
             }
@@ -395,11 +430,100 @@ namespace PiPDisabler
             if (_blackPass >= 0) _cb.DrawMesh(_disk, Matrix4x4.identity, _blackMat, 1, _blackPass);
             _cb.SetViewProjectionMatrices(c.worldToCameraMatrix, c.projectionMatrix);
 
+            _frameNo++;
+            if (_frameNo == 90 && _hands.Count > 0 && Settings.DebugLogging != null && Settings.DebugLogging.Value) LogHandDiag(c, sc, reach, rPx);
             if (!_loggedFrame)
             {
                 _loggedFrame = true;
                 PiPDisablerPlugin.LogSource.LogInfo(
                     $"[PixelHole] First frame: lens {rPx:F0}px on screen, {moved} parts and {hands} hand parts cover it ({drawn} drawn by the mod, {forwardOnly} forward-only parts hidden while covering it), black surface shader: {_blackShader}");
+            }
+        }
+
+        private static readonly Dictionary<Renderer, Mesh> _baked = new Dictionary<Renderer, Mesh>();
+        private static MaterialPropertyBlock _mpb;
+        private static readonly string[] ShNames = { "unity_SHAr", "unity_SHAg", "unity_SHAb", "unity_SHBr", "unity_SHBg", "unity_SHBb", "unity_SHC" };
+        private static int[] _shIds;
+
+        // Light-probe ambient for a mesh drawn outside the renderer (Unity's own SH → shader constants).
+        private static void SetAmbient(MaterialPropertyBlock mpb, Renderer r)
+        {
+            if (r.lightProbeUsage == LightProbeUsage.Off) return;
+            if (_shIds == null)
+            {
+                _shIds = new int[ShNames.Length];
+                for (int i = 0; i < ShNames.Length; i++) _shIds[i] = Shader.PropertyToID(ShNames[i]);
+            }
+            Vector3 pos = r.probeAnchor != null ? r.probeAnchor.position : r.bounds.center;
+            LightProbes.GetInterpolatedProbe(pos, r, out SphericalHarmonicsL2 sh);
+            for (int c = 0; c < 3; c++)
+            {
+                mpb.SetVector(_shIds[c], new Vector4(sh[c, 3], sh[c, 1], sh[c, 2], sh[c, 0] - sh[c, 6]));
+                mpb.SetVector(_shIds[3 + c], new Vector4(sh[c, 4], sh[c, 5], sh[c, 6] * 3f, sh[c, 7]));
+            }
+            mpb.SetVector(_shIds[6], new Vector4(sh[0, 8], sh[1, 8], sh[2, 8], 1f));
+        }
+
+        // Unity's deferred lights only light pixels whose stencil has the "non background" bit (128), which
+        // the engine sets for objects in its own G-buffer pass but not for meshes a command buffer draws: the
+        // redrawn arms got only their ambient and came out almost black (3.8.1). This writes that bit where
+        // the arms are visible (no colour, no depth).
+        private static Material _nonBgMat;
+        private static bool _nonBgTried;
+        private static Material NonBackgroundMat()
+        {
+            if (_nonBgMat != null || _nonBgTried) return _nonBgMat;
+            _nonBgTried = true;
+            var sh = Shader.Find("UI/Default");
+            if (sh == null) return null;
+            _nonBgMat = new Material(sh) { name = "PiPDisabler hand stencil", hideFlags = HideFlags.HideAndDontSave };
+            _nonBgMat.SetFloat("_Stencil", 128f);
+            _nonBgMat.SetFloat("_StencilComp", (float)CompareFunction.Always);
+            _nonBgMat.SetFloat("_StencilOp", (float)StencilOp.Replace);
+            _nonBgMat.SetFloat("_StencilWriteMask", 128f);
+            _nonBgMat.SetFloat("_StencilReadMask", 255f);
+            _nonBgMat.SetFloat("_ColorMask", 0f);
+            _nonBgMat.SetInt("unity_GUIZTestMode", (int)CompareFunction.LessEqual);
+            _nonBgMat.SetInt("_ZTest", (int)CompareFunction.LessEqual);
+            _nonBgMat.SetInt("_ZWrite", 0);
+            return _nonBgMat;
+        }
+
+        private static void ReleaseBaked()
+        {
+            foreach (var kv in _baked)
+                if (kv.Value != null) UnityEngine.Object.Destroy(kv.Value);
+            _baked.Clear();
+        }
+
+        // Diagnostic (3.8.1): why each hand part is or is not hidden this frame.
+        private static void LogHandDiag(Camera c, Vector2 sc, float reach, float rPx)
+        {
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.Append($"[PixelHole] HandDiag frame {_frameNo}: lens centre ({sc.x:F0},{sc.y:F0}) r={rPx:F0}px; {_handSetup}");
+                foreach (var r in _hands)
+                {
+                    if (r == null) { sb.Append(" | null"); continue; }
+                    var mesh = MeshOf(r);
+                    var b = r.bounds;
+                    var smr = r as SkinnedMeshRenderer;
+                    sb.Append($" | '{r.name}' {r.GetType().Name} enabled={r.enabled} active={r.gameObject.activeInHierarchy} forceOff={r.forceRenderingOff} isVisible={r.isVisible} layer={r.gameObject.layer} moved={_handsMoved.ContainsKey(r)} lodHidden={_lodHidden.Contains(r)} touches={Touches(c, b, sc, reach)} mesh={(mesh != null ? mesh.name + "/" + mesh.subMeshCount : "null")}");
+                    if (smr != null) sb.Append($" rootBone={(smr.rootBone != null ? smr.rootBone.name : "null")} offscreen={smr.updateWhenOffscreen}");
+                    sb.Append($" bounds c=({b.center.x:F2},{b.center.y:F2},{b.center.z:F2}) s=({b.size.x:F2},{b.size.y:F2},{b.size.z:F2}) cam=({c.transform.position.x:F2},{c.transform.position.y:F2},{c.transform.position.z:F2})");
+                    Vector3 bs = c.WorldToScreenPoint(b.center);
+                    sb.Append($" centreOnScreen=({bs.x:F0},{bs.y:F0},{bs.z:F2})");
+                    r.GetSharedMaterials(_mats);
+                    sb.Append(" mats=");
+                    foreach (var m in _mats)
+                        sb.Append(m == null ? "null" : $"{m.name}[{(m.shader != null ? m.shader.name : "?")} deferred={DeferredPass(m)}]").Append(';');
+                }
+                PiPDisablerPlugin.LogSource.LogInfo(sb.ToString());
+            }
+            catch (Exception ex)
+            {
+                PiPDisablerPlugin.LogSource.LogInfo("[PixelHole] HandDiag failed: " + ex.Message);
             }
         }
 
