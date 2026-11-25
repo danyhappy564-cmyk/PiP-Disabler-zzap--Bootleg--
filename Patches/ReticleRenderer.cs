@@ -344,13 +344,27 @@ namespace PiPDisabler
             cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
             cmd.DrawMesh(fullScreenMesh, fullScreenMatrix, _stencilClearMat, 0, -1);
 
-            cmd.SetViewProjectionMatrices(cam.worldToCameraMatrix, cam.projectionMatrix);
+            cmd.SetViewProjectionMatrices(cam.worldToCameraMatrix, StableProjection(cam));
             for (int i = 0; i < _occluderMaskRenderers.Count; i++)
                 DrawOccluderMaskRenderer(cmd, _occluderMaskRenderers[i]);
             for (int i = 0; i < _lensMaskEntries.Count; i++)
                 DrawLensMaskEntry(cmd, _lensMaskEntries[i]);
 
             return true;
+        }
+
+        // DLSS / FSR / TAA shake the projection by a sub-pixel offset every frame (jitter) and the upscaler
+        // removes it again. The reticle, its lens mask and the vignette clip are drawn after that
+        // (AfterEverything, final resolution), so they must use the projection without the jitter, or the
+        // lens mask edge shakes with it. Without an upscaler both matrices are the same.
+        private static Matrix4x4 StableProjection(Camera cam) => cam.nonJitteredProjectionMatrix;
+
+        private static Vector3 WorldToViewportStable(Camera cam, Vector3 world)
+        {
+            Vector3 view = cam.worldToCameraMatrix.MultiplyPoint3x4(world);
+            Vector4 clip = cam.nonJitteredProjectionMatrix * new Vector4(view.x, view.y, view.z, 1f);
+            if (Mathf.Abs(clip.w) < 1e-6f) return cam.WorldToViewportPoint(world);
+            return new Vector3(clip.x / clip.w * 0.5f + 0.5f, clip.y / clip.w * 0.5f + 0.5f, -view.z);
         }
 
         public static bool TryGetLensMaskClipBounds(Camera cam, out Vector2 center, out Vector2 size)
@@ -376,7 +390,7 @@ namespace PiPDisabler
                 for (int v = 0; v < _lensBoundsVertices.Count; v++)
                 {
                     Vector3 local = _lensBoundsVertices[v];
-                    Vector3 view = cam.WorldToViewportPoint(matrix.MultiplyPoint3x4(local));
+                    Vector3 view = WorldToViewportStable(cam, matrix.MultiplyPoint3x4(local));
                     if (view.z <= cam.nearClipPlane) continue;
 
                     min.x = Mathf.Min(min.x, view.x);
@@ -736,16 +750,18 @@ namespace PiPDisabler
 
                 Vector3 position = _savedScopeReticle.Position;
                 position.z = 0.5f;
-                float zRotation = Mathf.Repeat(_savedScopeReticle.Rotation.z, 360f);
-                bool quarterTurnReticle = Mathf.Abs(zRotation - 90f) < 0.5f || Mathf.Abs(zRotation - 270f) < 0.5f;
-                Vector3 meshReticleScale = quarterTurnReticle
-                    ? new Vector3(meshScale, meshScale / Mathf.Max(0.01f, meshAspect), meshScale)
-                    : new Vector3(meshScale / Mathf.Max(0.01f, meshAspect), meshScale, meshScale);
-
-                _reticleMatrix = Matrix4x4.TRS(
-                    position,
+                // Vanilla draws this mesh into the square optic RT. On the wide screen the X axis must be
+                // squeezed by the aspect AFTER the reticle's own rotation. The old code squeezed a local axis
+                // chosen from Rotation.z only (0/90 degrees), which is wrong for reticles rotated on other
+                // axes too: e.g. Epic's AiO variable scopes use (-90, 90, 90), local X maps to screen X and
+                // local Z to screen Y, so the reticle came out about aspect-times too wide.
+                // For 0/90/180/270 degrees about Z this gives exactly the previous result.
+                Matrix4x4 rotatedReticle = Matrix4x4.TRS(
+                    Vector3.zero,
                     Quaternion.Euler(_savedScopeReticle.Rotation),
-                    meshReticleScale);
+                    new Vector3(meshScale, meshScale, meshScale));
+                Matrix4x4 aspectFix = Matrix4x4.Scale(new Vector3(1f / Mathf.Max(0.01f, meshAspect), 1f, 1f));
+                _reticleMatrix = Matrix4x4.Translate(position) * aspectFix * rotatedReticle;
                 return;
             }
 
@@ -856,7 +872,7 @@ namespace PiPDisabler
                     DrawActiveReticle();
             }
 
-            _cmdBuffer.SetViewProjectionMatrices(cam.worldToCameraMatrix, cam.projectionMatrix);
+            _cmdBuffer.SetViewProjectionMatrices(cam.worldToCameraMatrix, StableProjection(cam));
         }
 
         public static bool AppendReticleForNvgLensBlur(CommandBuffer cmd, Rect viewport)
