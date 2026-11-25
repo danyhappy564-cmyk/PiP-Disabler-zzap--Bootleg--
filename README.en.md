@@ -46,6 +46,8 @@ Scopes whose zoom data is not initialized wait until it is ready. This prevents 
 Changed in 3.8.1:
 
 - **Hand hiding actually works now**: with `Pixel Hole Hides Hands` on, the support hand and glove still showed inside the lens when aiming (reported by the original author). The watch glass on the USEC/BEAR arm model kept the whole arm out of the hiding. Now the arm disappears only inside the lens and keeps its normal lighting outside it (checked in raid and in the hideout shooting range). Only the watch glass is not drawn while aiming.
+- **Thin reticle lines no longer break up**: thin strokes such as Vudu's centre cross looked dotted (mostly at 4K with upscaling). The zero-offset reticle position is now snapped to whole screen pixels.
+- **Latest upstream fixes**: the parts of the original mod's SPT 4.1.6 fix that were missing here (muzzle-flash mesh is no longer cut, etc.) are included.
 
 Changed in 3.8:
 
